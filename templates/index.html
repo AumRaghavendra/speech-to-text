@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -64,24 +64,57 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     
     <style>
+        /* Force dark mode colors */
+        :root {
+            color-scheme: dark;
+        }
+        
+        body.dark, html.dark {
+            background-color: #0f172a;
+            color: #f3f4f6;
+        }
+        
+        .dark .bg-white {
+            background-color: #1e293b !important;
+        }
+        
+        .dark .text-gray-800 {
+            color: #f3f4f6 !important;
+        }
+        
+        .dark .text-gray-600 {
+            color: #cbd5e1 !important;
+        }
+        
+        .dark .text-gray-500 {
+            color: #94a3b8 !important;
+        }
+        
+        .dark .border-gray-200 {
+            border-color: #334155 !important;
+        }
+        
+        .dark .bg-gray-50 {
+            background-color: #1e293b !important;
+        }
+        
         /* Audio wave animation for visualizer */
         .audio-visualizer {
             display: flex;
             align-items: center;
             justify-content: center;
             height: 60px;
+            margin-bottom: 16px;
         }
         
         .audio-visualizer span {
             display: inline-block;
             width: 4px;
             margin: 0 2px;
+            height: 25px;
             border-radius: 2px;
             background: linear-gradient(to bottom, #38bdf8, #0ea5e9);
-        }
-        
-        .dark .audio-visualizer span {
-            background: linear-gradient(to bottom, #38bdf8, #0ea5e9);
+            animation: audio-wave 1.2s ease-in-out infinite;
         }
         
         .audio-visualizer span:nth-child(1) { animation-delay: 0.1s; }
@@ -100,13 +133,19 @@
         .audio-visualizer span:nth-child(14) { animation-delay: 0.4s; }
         .audio-visualizer span:nth-child(15) { animation-delay: 0.5s; }
         
-        .audio-visualizer.active span {
-            animation: audio-wave 1.2s ease-in-out infinite;
-            height: 30px;
+        .audio-visualizer.idle span {
+            animation-play-state: paused;
+            height: 5px;
         }
         
-        .audio-visualizer.idle span {
-            height: 5px;
+        /* Animation for audio wave */
+        @keyframes audio-wave {
+            0%, 100% {
+                height: 10px;
+            }
+            50% {
+                height: 40px;
+            }
         }
         
         /* Gradient background for dark mode */
@@ -115,9 +154,34 @@
             background-size: 200% 200%;
             animation: gradient-x 15s ease infinite;
         }
+        
+        /* Dark mode specific colors for models */
+        .dark .bg-blue-50 {
+            background-color: rgba(37, 99, 235, 0.2) !important;
+        }
+        
+        .dark .bg-red-50 {
+            background-color: rgba(239, 68, 68, 0.2) !important;
+        }
+        
+        .dark .bg-green-50 {
+            background-color: rgba(16, 185, 129, 0.2) !important;
+        }
+        
+        .dark .text-blue-800 {
+            color: #93c5fd !important;
+        }
+        
+        .dark .text-red-800 {
+            color: #fca5a5 !important;
+        }
+        
+        .dark .text-green-800 {
+            color: #86efac !important;
+        }
     </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
+<body class="bg-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
     <div id="root"></div>
 
     <!-- React and ReactDOM -->
@@ -127,51 +191,73 @@
     
     <!-- Waveform visualizer component -->
     <script type="text/babel">
+        // Custom AudioVisualizer component for showing audio levels
         const AudioVisualizer = React.forwardRef((props, ref) => {
             const { active } = props;
-            const canvasRef = React.useRef(null);
             const visualizerRef = React.useRef(null);
-            const [bars, setBars] = React.useState(Array(15).fill(5));
+            const [bars, setBars] = React.useState([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]);
             
+            // Method to update visualizer based on audio level
             React.useImperativeHandle(ref, () => ({
                 updateVisualizer: (audioLevel) => {
                     if (active && audioLevel !== undefined) {
                         // Scale the audio level to reasonable bar heights
                         const scaledLevel = Math.min(Math.max(audioLevel * 50, 0), 50);
                         
-                        // Create a dynamic bars array with varying heights based on audio level
-                        const newBars = bars.map((_, i) => {
+                        // Create a dynamic bars array with varying heights
+                        const newBars = [];
+                        for (let i = 0; i < 15; i++) {
                             // Add some randomness for a more natural visualization
                             const randomFactor = Math.random() * 0.5 + 0.5; 
-                            return Math.max(5, scaledLevel * randomFactor);
-                        });
+                            newBars.push(Math.max(5, scaledLevel * randomFactor));
+                        }
                         
                         setBars(newBars);
                     } else {
                         // Reset to minimal height when not active
-                        setBars(Array(15).fill(5));
+                        setBars([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]);
                     }
                 }
             }));
             
-            // Render the audio visualization bars
-            const renderVisualizer = () => {
-                return React.createElement(
-                    "div",
-                    { 
-                        className: `audio-visualizer ${active ? 'active' : 'idle'} mb-4`,
-                        ref: visualizerRef
-                    },
-                    bars.map((height, i) => 
-                        React.createElement("span", { 
+            // Create a manual demo animation effect
+            React.useEffect(() => {
+                if (active) {
+                    const interval = setInterval(() => {
+                        const newBars = bars.map(() => {
+                            return Math.floor(Math.random() * 35) + 5;
+                        });
+                        setBars(newBars);
+                    }, 150);
+                    return () => clearInterval(interval);
+                }
+            }, [active, bars]);
+            
+            // Render the bars for audio visualization
+            const renderBars = () => {
+                const barElements = [];
+                
+                for (let i = 0; i < bars.length; i++) {
+                    const height = bars[i];
+                    barElements.push(
+                        React.createElement("span", {
                             key: i,
-                            style: { height: `${height}px` }
+                            style: { height: height + "px" }
                         })
-                    )
-                );
+                    );
+                }
+                
+                return barElements;
             };
             
-            return renderVisualizer();
+            return React.createElement(
+                "div",
+                {
+                    className: `audio-visualizer ${active ? 'active' : 'idle'} mb-4`,
+                    ref: visualizerRef
+                },
+                renderBars()
+            );
         });
     </script>
     
@@ -187,8 +273,11 @@
     <script src="{{ url_for('static', filename='js/app.js') }}" type="text/babel"></script>
     
     <script>
-        // Enable dark mode by default
-        document.body.classList.add('dark');
+        // Ensure dark mode is applied
+        document.addEventListener("DOMContentLoaded", function() {
+            document.documentElement.classList.add('dark');
+            document.body.classList.add('dark');
+        });
     </script>
 </body>
 </html>

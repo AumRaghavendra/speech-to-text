@@ -1,0 +1,114 @@
+/* Dark mode styles */
+body.dark {
+  background-color: #0f172a !important;
+  color: #f3f4f6 !important;
+}
+
+body.dark .bg-white {
+  background-color: #1e293b !important;
+}
+
+body.dark .bg-gray-50 {
+  background-color: #1e293b !important;
+}
+
+body.dark .text-gray-800 {
+  color: #f3f4f6 !important;
+}
+
+body.dark .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+
+body.dark .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+body.dark .border-gray-200 {
+  border-color: #334155 !important;
+}
+
+body.dark .transcription-container {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+/* Audio visualizer styles */
+.audio-visualizer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  margin-bottom: 1rem;
+}
+
+.audio-visualizer span {
+  display: inline-block;
+  width: 4px;
+  margin: 0 2px;
+  height: 5px;
+  border-radius: 2px;
+  background: linear-gradient(to bottom, #4f46e5, #6366f1);
+  transition: height 0.2s ease-in-out;
+}
+
+body.dark .audio-visualizer span {
+  background: linear-gradient(to bottom, #38bdf8, #0ea5e9);
+}
+
+.audio-visualizer.active span {
+  animation: audio-wave 1.2s ease-in-out infinite;
+}
+
+@keyframes audio-wave {
+  0%, 100% {
+    height: 10px;
+  }
+  50% {
+    height: 40px;
+  }
+}
+
+/* Gradient background */
+.gradient-dark {
+  background: linear-gradient(to right, #0f172a, #1e293b, #0f172a);
+  background-size: 200% 200%;
+  animation: gradient-x 15s ease infinite;
+}
+
+@keyframes gradient-x {
+  0%, 100% {
+    background-size: 200% 200%;
+    background-position: left center;
+  }
+  50% {
+    background-size: 200% 200%;
+    background-position: right center;
+  }
+}
+
+/* Model cards in dark mode */
+body.dark .bg-blue-50 {
+  background-color: rgba(37, 99, 235, 0.2) !important;
+}
+
+body.dark .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+body.dark .bg-green-50 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+/* Text colors in dark mode */
+body.dark .text-blue-800 {
+  color: #93c5fd !important;
+}
+
+body.dark .text-red-800 {
+  color: #fca5a5 !important;
+}
+
+body.dark .text-green-800 {
+  color: #86efac !important;
+}
