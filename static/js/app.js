@@ -59,7 +59,7 @@ const App = () => {
     // Create a new fake transcription result
     const result = {
       text: text,
-      model: currentModel,
+      model: window.currentSelectedModel || currentModel,
       confidence: confidence,
       processing_time: processing_time,
       demo_mode: true,

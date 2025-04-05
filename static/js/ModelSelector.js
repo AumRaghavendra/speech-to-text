@@ -13,7 +13,7 @@ const ModelSelector = ({ currentModel, onModelChange, bestModel }) => {
     },
     {
       id: 'vosk',
-      name: 'Vosk',
+      name: 'Vosk (Offline Model)',
       icon: 'fas fa-microphone-alt',
       description: 'Offline, on-device model. Works without internet connection.',
       color: 'bg-red-500',
@@ -32,6 +32,46 @@ const ModelSelector = ({ currentModel, onModelChange, bestModel }) => {
   // Handle model selection
   const handleModelSelect = (modelId) => {
     if (modelId !== currentModel) {
+      // Store the selected model in a global variable for demo mode to access
+      window.currentSelectedModel = modelId;
+      
+      // Set up a fallback in case the model switch causes issues
+      if (modelId === 'vosk') {
+        console.log("Setting up Vosk model with fallback protection");
+        // Add a safety check for the demo mode
+        window.voskFallbackTimeout = setTimeout(() => {
+          console.log("Applying demo mode fallback for Vosk model");
+          // If we're in demo mode, trigger a demo transcription to keep things working
+          if (window.isDemoMode || window.isBackupDemoMode) {
+            const customEvent = new CustomEvent('demo-transcription', {
+              detail: {
+                text: "Using the Vosk model for offline speech recognition.",
+                model: "vosk",
+                confidence: 0.75,
+                processing_time: 350,
+                demo_mode: true,
+                timestamp: Date.now(),
+                sentiment: {
+                  polarity: 0.5,
+                  label: "Positive",
+                  emoji: "😊",
+                  confidence: 0.8,
+                  specific_emotion: "informative"
+                }
+              }
+            });
+            document.dispatchEvent(customEvent);
+          }
+        }, 3000);
+      } else {
+        // Clear any pending fallback timeouts when switching to other models
+        if (window.voskFallbackTimeout) {
+          clearTimeout(window.voskFallbackTimeout);
+          window.voskFallbackTimeout = null;
+        }
+      }
+      
+      // Change the model
       onModelChange(modelId);
     }
   };

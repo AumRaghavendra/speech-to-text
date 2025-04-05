@@ -53,7 +53,8 @@ const PerformanceMetrics = ({ metrics, onResetMetrics }) => {
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return `${context.dataset.label}: ${context.raw.toFixed(1)} ms`;
+                  const value = context.raw || 0;
+                  return `${context.dataset.label}: ${value.toFixed(1)} ms`;
                 }
               }
             }
@@ -90,7 +91,8 @@ const PerformanceMetrics = ({ metrics, onResetMetrics }) => {
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return `${context.dataset.label}: ${context.raw.toFixed(2)}`;
+                  const value = context.raw || 0;
+                  return `${context.dataset.label}: ${value.toFixed(2)}`;
                 }
               }
             }
@@ -123,7 +125,10 @@ const PerformanceMetrics = ({ metrics, onResetMetrics }) => {
         labels: modelKeys.map(getModelDisplayName),
         datasets: [{
           label: 'Processing Time',
-          data: modelKeys.map(key => metrics[key].avg_processing_time),
+          data: modelKeys.map(key => {
+            const modelData = metrics[key] || {};
+            return modelData.avg_processing_time || 0;
+          }),
           backgroundColor: modelKeys.map(key => getModelColor(key, metrics.best_model, 0.7)),
           borderColor: modelKeys.map(key => getModelColor(key, metrics.best_model, 1)),
           borderWidth: 1
@@ -140,7 +145,10 @@ const PerformanceMetrics = ({ metrics, onResetMetrics }) => {
         labels: modelKeys.map(getModelDisplayName),
         datasets: [{
           label: 'Confidence',
-          data: modelKeys.map(key => metrics[key].avg_confidence),
+          data: modelKeys.map(key => {
+            const modelData = metrics[key] || {};
+            return modelData.avg_confidence || 0;
+          }),
           backgroundColor: modelKeys.map(key => getModelColor(key, metrics.best_model, 0.7)),
           borderColor: modelKeys.map(key => getModelColor(key, metrics.best_model, 1)),
           borderWidth: 1
@@ -188,15 +196,21 @@ const PerformanceMetrics = ({ metrics, onResetMetrics }) => {
     if (modelKeys.length === 0) return [];
     
     return modelKeys.map(key => {
-      const modelData = metrics[key];
+      const modelData = metrics[key] || {};
       const isBestModel = key === metrics.best_model;
+      
+      // Handle missing or undefined values
+      const processingTime = modelData.avg_processing_time || 0;
+      const confidence = modelData.avg_confidence || 0;
+      const wordsPerMinute = modelData.words_per_minute || 0;
+      const count = modelData.count || 0;
       
       return {
         name: getModelDisplayName(key),
-        processingTime: modelData.avg_processing_time,
-        confidence: modelData.avg_confidence,
-        wordsPerMinute: modelData.words_per_minute,
-        count: modelData.count,
+        processingTime: processingTime,
+        confidence: confidence,
+        wordsPerMinute: wordsPerMinute,
+        count: count,
         isBestModel
       };
     });
@@ -227,19 +241,19 @@ const PerformanceMetrics = ({ metrics, onResetMetrics }) => {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <p className="text-gray-500">Processing Time:</p>
-                      <p className="font-medium">{stat.processingTime.toFixed(1)} ms</p>
+                      <p className="font-medium">{(stat.processingTime || 0).toFixed(1)} ms</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Confidence:</p>
-                      <p className="font-medium">{stat.confidence.toFixed(2)}</p>
+                      <p className="font-medium">{(stat.confidence || 0).toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Words/Min:</p>
-                      <p className="font-medium">{stat.wordsPerMinute.toFixed(1)}</p>
+                      <p className="font-medium">{(stat.wordsPerMinute || 0).toFixed(1)}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Samples:</p>
-                      <p className="font-medium">{stat.count}</p>
+                      <p className="font-medium">{stat.count || 0}</p>
                     </div>
                   </div>
                 </div>

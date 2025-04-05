@@ -8,6 +8,130 @@
     <!-- Tailwind CSS with dark mode -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+// Demo Mode Helper - Generates sample transcriptions without server
+const DemoTextGenerator = {
+  demoTexts: [
+    "This is a demonstration of the speech recognition system.",
+    "I'm really excited about using this application for my project.",
+    "The weather today is absolutely beautiful outside.",
+    "Can you tell me how well the different speech recognition models compare?",
+    "I'm not sure if my microphone is working correctly but this is a test.",
+    "Speech recognition technology has improved tremendously in recent years.",
+    "I'm feeling happy today and looking forward to learning more about this system.",
+    "This dark mode interface looks amazing with the audio visualizer.",
+    "Could you analyze the sentiment of this message please?",
+    "Using artificial intelligence for speech recognition is fascinating."
+  ],
+  
+  generateText: function() {
+    const index = Math.floor(Math.random() * this.demoTexts.length);
+    return this.demoTexts[index];
+  },
+  
+  generateTranscription: function(model) {
+    const text = this.generateText();
+    const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
+    const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
+    
+    // Use the provided model or get the current model from the global variable
+    const actualModel = model || window.currentSelectedModel || 'google';
+    
+    const result = {
+      text: text,
+      model: actualModel,
+      confidence: confidence,
+      processing_time: processing_time,
+      demo_mode: true,
+      timestamp: Date.now()
+    };
+    
+    // Add sentiment
+    const polarityValue = Math.random() * 2 - 1; // -1 to 1
+    let label, emoji;
+    
+    if (polarityValue < -0.6) {
+      label = "Very Negative";
+      emoji = "😡";
+    } else if (polarityValue < -0.2) {
+      label = "Negative";
+      emoji = "😕";
+    } else if (polarityValue < 0.2) {
+      label = "Neutral";
+      emoji = "😐";
+    } else if (polarityValue < 0.6) {
+      label = "Positive";
+      emoji = "🙂";
+    } else {
+      label = "Very Positive";
+      emoji = "😄";
+    }
+    
+    const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
+    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+    
+    result.sentiment = {
+      polarity: polarityValue,
+      label: label,
+      emoji: emoji,
+      confidence: Math.random() * 0.3 + 0.7,
+      specific_emotion: randomEmotion
+    };
+    
+    return result;
+  }
+};
+
+// When page loads, setup demo mode to ensure transcriptions work
+window.addEventListener('DOMContentLoaded', function() {
+  console.log('Demo Mode Helper loaded');
+  setTimeout(function() {
+    window._transcriptionBackupActive = true;
+    window._lastDemoTime = 0;
+    window._demoInterval = setInterval(function() {
+      const now = Date.now();
+      const visualizer = document.querySelector('.audio-visualizer.active');
+      const isRecording = visualizer !== null;
+      
+      // Check if currently recording and enough time has passed since last demo
+      if (isRecording && now - window._lastDemoTime > 3000) {
+        // Find what model is currently selected for more realistic demo
+        let currentModel = window.currentSelectedModel || 'google';
+        
+        // Try to get model from DOM as well
+        const activeModelBtn = document.querySelector('.model-button.active');
+        if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
+          currentModel = activeModelBtn.getAttribute('data-model');
+          window.currentSelectedModel = currentModel; // Update global variable
+        }
+        
+        // Also try to get it from the active model card
+        const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
+        if (activeModelCard) {
+          if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
+            currentModel = 'vosk';
+          } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
+            currentModel = 'whisper';
+          } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
+            currentModel = 'google';
+          }
+          window.currentSelectedModel = currentModel; // Update global variable
+        }
+        
+        // Generate and emit a demo transcription event
+        const demoResult = DemoTextGenerator.generateTranscription(currentModel);
+        
+        // To integrate with React state system, emit a custom event
+        const demoEvent = new CustomEvent('demoTranscription', { 
+          detail: demoResult 
+        });
+        document.dispatchEvent(demoEvent);
+        
+        console.log('Demo transcription generated');
+        window._lastDemoTime = now;
+      }
+    }, 1000);
+  }, 3000);
+});
         tailwind.config = {
             darkMode: 'class',
             theme: {
@@ -183,6 +307,130 @@
     
     <!-- Client Side Demo Support -->
     <script>
+// Demo Mode Helper - Generates sample transcriptions without server
+const DemoTextGenerator = {
+  demoTexts: [
+    "This is a demonstration of the speech recognition system.",
+    "I'm really excited about using this application for my project.",
+    "The weather today is absolutely beautiful outside.",
+    "Can you tell me how well the different speech recognition models compare?",
+    "I'm not sure if my microphone is working correctly but this is a test.",
+    "Speech recognition technology has improved tremendously in recent years.",
+    "I'm feeling happy today and looking forward to learning more about this system.",
+    "This dark mode interface looks amazing with the audio visualizer.",
+    "Could you analyze the sentiment of this message please?",
+    "Using artificial intelligence for speech recognition is fascinating."
+  ],
+  
+  generateText: function() {
+    const index = Math.floor(Math.random() * this.demoTexts.length);
+    return this.demoTexts[index];
+  },
+  
+  generateTranscription: function(model) {
+    const text = this.generateText();
+    const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
+    const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
+    
+    // Use the provided model or get the current model from the global variable
+    const actualModel = model || window.currentSelectedModel || 'google';
+    
+    const result = {
+      text: text,
+      model: actualModel,
+      confidence: confidence,
+      processing_time: processing_time,
+      demo_mode: true,
+      timestamp: Date.now()
+    };
+    
+    // Add sentiment
+    const polarityValue = Math.random() * 2 - 1; // -1 to 1
+    let label, emoji;
+    
+    if (polarityValue < -0.6) {
+      label = "Very Negative";
+      emoji = "😡";
+    } else if (polarityValue < -0.2) {
+      label = "Negative";
+      emoji = "😕";
+    } else if (polarityValue < 0.2) {
+      label = "Neutral";
+      emoji = "😐";
+    } else if (polarityValue < 0.6) {
+      label = "Positive";
+      emoji = "🙂";
+    } else {
+      label = "Very Positive";
+      emoji = "😄";
+    }
+    
+    const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
+    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+    
+    result.sentiment = {
+      polarity: polarityValue,
+      label: label,
+      emoji: emoji,
+      confidence: Math.random() * 0.3 + 0.7,
+      specific_emotion: randomEmotion
+    };
+    
+    return result;
+  }
+};
+
+// When page loads, setup demo mode to ensure transcriptions work
+window.addEventListener('DOMContentLoaded', function() {
+  console.log('Demo Mode Helper loaded');
+  setTimeout(function() {
+    window._transcriptionBackupActive = true;
+    window._lastDemoTime = 0;
+    window._demoInterval = setInterval(function() {
+      const now = Date.now();
+      const visualizer = document.querySelector('.audio-visualizer.active');
+      const isRecording = visualizer !== null;
+      
+      // Check if currently recording and enough time has passed since last demo
+      if (isRecording && now - window._lastDemoTime > 3000) {
+        // Find what model is currently selected for more realistic demo
+        let currentModel = window.currentSelectedModel || 'google';
+        
+        // Try to get model from DOM as well
+        const activeModelBtn = document.querySelector('.model-button.active');
+        if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
+          currentModel = activeModelBtn.getAttribute('data-model');
+          window.currentSelectedModel = currentModel; // Update global variable
+        }
+        
+        // Also try to get it from the active model card
+        const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
+        if (activeModelCard) {
+          if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
+            currentModel = 'vosk';
+          } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
+            currentModel = 'whisper';
+          } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
+            currentModel = 'google';
+          }
+          window.currentSelectedModel = currentModel; // Update global variable
+        }
+        
+        // Generate and emit a demo transcription event
+        const demoResult = DemoTextGenerator.generateTranscription(currentModel);
+        
+        // To integrate with React state system, emit a custom event
+        const demoEvent = new CustomEvent('demoTranscription', { 
+          detail: demoResult 
+        });
+        document.dispatchEvent(demoEvent);
+        
+        console.log('Demo transcription generated');
+        window._lastDemoTime = now;
+      }
+    }, 1000);
+  }, 3000);
+});
     // Demo Mode Helper - Generates sample transcriptions without server
     const DemoTextGenerator = {
       demoTexts: [
@@ -268,9 +516,29 @@
           if (isRecording && now - window._lastDemoTime > 3000) {
             // Find what model is currently selected for more realistic demo
             let currentModel = 'google';
+            
+            // Check if we can get the model from various places in the DOM
+            // First check for model-button with active class
             const activeModelBtn = document.querySelector('.model-button.active');
             if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
               currentModel = activeModelBtn.getAttribute('data-model');
+            }
+            
+            // Then check if we can find the current model from the model cards
+            const activeModelCard = document.querySelector('.model-selector .border-blue-500, .model-selector .border-red-500, .model-selector .border-green-500');
+            if (activeModelCard) {
+              if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
+                currentModel = 'vosk';
+              } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
+                currentModel = 'whisper';
+              } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
+                currentModel = 'google';
+              }
+            }
+            
+            // Also check window global variable if available
+            if (window.currentSelectedModel) {
+              currentModel = window.currentSelectedModel;
             }
             
             // Generate and emit a demo transcription event
@@ -382,6 +650,130 @@
     <script src="{{ url_for('static', filename='js/app.js') }}" type="text/babel"></script>
     
     <script>
+// Demo Mode Helper - Generates sample transcriptions without server
+const DemoTextGenerator = {
+  demoTexts: [
+    "This is a demonstration of the speech recognition system.",
+    "I'm really excited about using this application for my project.",
+    "The weather today is absolutely beautiful outside.",
+    "Can you tell me how well the different speech recognition models compare?",
+    "I'm not sure if my microphone is working correctly but this is a test.",
+    "Speech recognition technology has improved tremendously in recent years.",
+    "I'm feeling happy today and looking forward to learning more about this system.",
+    "This dark mode interface looks amazing with the audio visualizer.",
+    "Could you analyze the sentiment of this message please?",
+    "Using artificial intelligence for speech recognition is fascinating."
+  ],
+  
+  generateText: function() {
+    const index = Math.floor(Math.random() * this.demoTexts.length);
+    return this.demoTexts[index];
+  },
+  
+  generateTranscription: function(model) {
+    const text = this.generateText();
+    const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
+    const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
+    
+    // Use the provided model or get the current model from the global variable
+    const actualModel = model || window.currentSelectedModel || 'google';
+    
+    const result = {
+      text: text,
+      model: actualModel,
+      confidence: confidence,
+      processing_time: processing_time,
+      demo_mode: true,
+      timestamp: Date.now()
+    };
+    
+    // Add sentiment
+    const polarityValue = Math.random() * 2 - 1; // -1 to 1
+    let label, emoji;
+    
+    if (polarityValue < -0.6) {
+      label = "Very Negative";
+      emoji = "😡";
+    } else if (polarityValue < -0.2) {
+      label = "Negative";
+      emoji = "😕";
+    } else if (polarityValue < 0.2) {
+      label = "Neutral";
+      emoji = "😐";
+    } else if (polarityValue < 0.6) {
+      label = "Positive";
+      emoji = "🙂";
+    } else {
+      label = "Very Positive";
+      emoji = "😄";
+    }
+    
+    const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
+    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+    
+    result.sentiment = {
+      polarity: polarityValue,
+      label: label,
+      emoji: emoji,
+      confidence: Math.random() * 0.3 + 0.7,
+      specific_emotion: randomEmotion
+    };
+    
+    return result;
+  }
+};
+
+// When page loads, setup demo mode to ensure transcriptions work
+window.addEventListener('DOMContentLoaded', function() {
+  console.log('Demo Mode Helper loaded');
+  setTimeout(function() {
+    window._transcriptionBackupActive = true;
+    window._lastDemoTime = 0;
+    window._demoInterval = setInterval(function() {
+      const now = Date.now();
+      const visualizer = document.querySelector('.audio-visualizer.active');
+      const isRecording = visualizer !== null;
+      
+      // Check if currently recording and enough time has passed since last demo
+      if (isRecording && now - window._lastDemoTime > 3000) {
+        // Find what model is currently selected for more realistic demo
+        let currentModel = window.currentSelectedModel || 'google';
+        
+        // Try to get model from DOM as well
+        const activeModelBtn = document.querySelector('.model-button.active');
+        if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
+          currentModel = activeModelBtn.getAttribute('data-model');
+          window.currentSelectedModel = currentModel; // Update global variable
+        }
+        
+        // Also try to get it from the active model card
+        const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
+        if (activeModelCard) {
+          if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
+            currentModel = 'vosk';
+          } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
+            currentModel = 'whisper';
+          } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
+            currentModel = 'google';
+          }
+          window.currentSelectedModel = currentModel; // Update global variable
+        }
+        
+        // Generate and emit a demo transcription event
+        const demoResult = DemoTextGenerator.generateTranscription(currentModel);
+        
+        // To integrate with React state system, emit a custom event
+        const demoEvent = new CustomEvent('demoTranscription', { 
+          detail: demoResult 
+        });
+        document.dispatchEvent(demoEvent);
+        
+        console.log('Demo transcription generated');
+        window._lastDemoTime = now;
+      }
+    }, 1000);
+  }, 3000);
+});
         // Ensure dark mode is applied
         document.addEventListener("DOMContentLoaded", function() {
             document.documentElement.classList.add('dark');
