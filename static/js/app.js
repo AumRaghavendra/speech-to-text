@@ -547,3 +547,18 @@ const App = () => {
 
 // Mount the app
 ReactDOM.render(<App />, document.getElementById('root'));
+// Fix for demoTranscription event handling
+document.addEventListener('demoTranscription', function(event) {
+  if (event.detail) {
+    console.log('Received demo transcription from event:', event.detail);
+    // Dispatch it as a custom event to be handled by the app
+    const customEvent = new CustomEvent('demo_transcription', {
+      detail: event.detail
+    });
+    document.dispatchEvent(customEvent);
+  }
+});
+// Add direct event listener for demo transcriptions
+document.addEventListener('demo_transcription', function(event) {
+  console.log('Demo transcription event received in app.js:', event.detail);
+});

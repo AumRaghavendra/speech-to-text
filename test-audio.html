@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Audio Recording Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 15px;
+      margin: 10px 5px;
+      cursor: pointer;
+    }
+    #visualizer {
+      width: 100%;
+      height: 100px;
+      background-color: #f0f0f0;
+      margin: 15px 0;
+    }
+    #results {
+      margin-top: 20px;
+      border: 1px solid #ddd;
+      padding: 10px;
+      height: 300px;
+      overflow-y: auto;
+    }
+    .audio-clip {
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Audio Recording Test</h1>
+  <p>This page tests basic microphone access and audio recording functionality.</p>
+  
+  <div>
+    <button id="startButton">Start Recording</button>
+    <button id="stopButton" disabled>Stop Recording</button>
+    <button id="playButton" disabled>Play Last Recording</button>
+  </div>
+  
+  <canvas id="visualizer"></canvas>
+  
+  <div id="results">
+    <p>Recording logs will appear here.</p>
+  </div>
+  
+  <script>
+    // DOM elements
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
+    const playButton = document.getElementById('playButton');
+    const visualizer = document.getElementById('visualizer');
+    const results = document.getElementById('results');
+    
+    // Audio context and related objects
+    let audioContext;
+    let analyser;
+    let mediaRecorder;
+    let audioChunks = [];
+    let audioBlob;
+    let audioUrl;
+    let stream;
+    let animationId;
+    let audioPlayer;
+    
+    // Log a message to the results div
+    function log(message) {
+      const p = document.createElement('p');
+      p.textContent = message;
+      results.appendChild(p);
+      results.scrollTop = results.scrollHeight;
+    }
+    
+    // Update the visualizer
+    function updateVisualizer() {
+      if (!analyser) return;
+      
+      const canvasCtx = visualizer.getContext('2d');
+      const WIDTH = visualizer.width;
+      const HEIGHT = visualizer.height;
+      
+      // Clear the canvas
+      canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+      
+      // Continue the animation loop
+      animationId = requestAnimationFrame(updateVisualizer);
+      
+      // Get the frequency data
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      analyser.getByteFrequencyData(dataArray);
+      
+      // Draw the frequency data
+      canvasCtx.fillStyle = 'rgb(200, 200, 200)';
+      canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
+      
+      const barWidth = (WIDTH / bufferLength) * 2.5;
+      let barHeight;
+      let x = 0;
+      
+      for (let i = 0; i < bufferLength; i++) {
+        barHeight = dataArray[i] / 2;
+        
+        canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
+        canvasCtx.fillRect(x, HEIGHT - barHeight, barWidth, barHeight);
+        
+        x += barWidth + 1;
+      }
+    }
+    
+    // Start recording
+    async function startRecording() {
+      try {
+        log('Requesting microphone access...');
+        
+        // Request microphone access
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        });
+        
+        log('Microphone access granted!');
+        
+        // Set up audio context and analyser
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+        
+        // Set up visualizer
+        visualizer.width = visualizer.clientWidth;
+        visualizer.height = visualizer.clientHeight;
+        animationId = requestAnimationFrame(updateVisualizer);
+        
+        // Set up media recorder
+        const options = { mimeType: 'audio/webm' };
+        mediaRecorder = new MediaRecorder(stream, options);
+        
+        // Reset audio chunks
+        audioChunks = [];
+        
+        // Handle data available event
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+            log(`Audio chunk captured, size: ${event.data.size} bytes`);
+          }
+        };
+        
+        // Handle recording stop event
+        mediaRecorder.onstop = () => {
+          log('Recording stopped');
+          
+          // Create audio blob and URL
+          audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          audioUrl = URL.createObjectURL(audioBlob);
+          
+          log(`Recording complete: ${audioChunks.length} chunks, total size: ${audioBlob.size} bytes`);
+          
+          // Create audio player
+          if (audioPlayer) {
+            document.body.removeChild(audioPlayer);
+          }
+          
+          audioPlayer = document.createElement('audio');
+          audioPlayer.controls = true;
+          audioPlayer.src = audioUrl;
+          document.body.appendChild(audioPlayer);
+          
+          // Convert to base64 for inspection
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Audio = reader.result;
+            log(`Base64 audio data (first 100 chars): ${base64Audio.substring(0, 100)}...`);
+            
+            // Create audio element directly from the base64 data to verify it works
+            const audioEl = document.createElement('div');
+            audioEl.className = 'audio-clip';
+            audioEl.innerHTML = `
+              <p>Test playback from base64:</p>
+              <audio controls src="${base64Audio}"></audio>
+            `;
+            results.appendChild(audioEl);
+          };
+          reader.readAsDataURL(audioBlob);
+          
+          // Enable play button
+          playButton.disabled = false;
+        };
+        
+        // Start recording
+        mediaRecorder.start(1000); // Capture in 1-second chunks
+        log('Recording started');
+        
+        // Update button state
+        startButton.disabled = true;
+        stopButton.disabled = false;
+        
+      } catch (error) {
+        log(`Error: ${error.message}`);
+        console.error('Error starting recording:', error);
+      }
+    }
+    
+    // Stop recording
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+      
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+      
+      // Update button state
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    }
+    
+    // Play the last recording
+    function playLastRecording() {
+      if (audioPlayer) {
+        audioPlayer.play();
+      }
+    }
+    
+    // Event listeners
+    startButton.addEventListener('click', startRecording);
+    stopButton.addEventListener('click', stopRecording);
+    playButton.addEventListener('click', playLastRecording);
+  </script>
+</body>
+</html>
