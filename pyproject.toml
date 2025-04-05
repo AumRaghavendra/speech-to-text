@@ -18,4 +18,5 @@ dependencies = [
     "nltk>=3.9.1",
     "numpy>=2.2.4",
     "eventlet>=0.39.1",
+    "trafilatura>=2.0.0",
 ]
