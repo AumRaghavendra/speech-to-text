@@ -14,6 +14,7 @@ const AudioRecorder = React.forwardRef((props, ref) => {
   const animationFrameRef = React.useRef(null);
   const demoModeTimerRef = React.useRef(null);
   const audioProcessingIntervalRef = React.useRef(null);
+  const recordingEnabledRef = React.useRef(false);
   
   // Flag to track if we have a real microphone working
   const microphoneWorkingRef = React.useRef(false);
@@ -54,8 +55,10 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         onAudioLevel(normalizedLevel);
       }
       
-      // Continue animation loop
-      animationFrameRef.current = requestAnimationFrame(updateRealAudioLevels);
+      // Continue animation loop if still recording
+      if (recordingEnabledRef.current) {
+        animationFrameRef.current = requestAnimationFrame(updateRealAudioLevels);
+      }
     } catch (error) {
       console.error('Error analyzing audio:', error);
       // Fall back to mock audio levels
@@ -74,24 +77,9 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       onAudioLevel(mockLevel);
     }
     
-    // Continue animation loop
-    animationFrameRef.current = requestAnimationFrame(updateMockAudioLevels);
-  };
-  
-  // Fallback to ensure we get transcriptions even if microphone fails
-  const sendDemoAudioData = () => {
-    if (!microphoneWorkingRef.current) {
-      console.log("Microphone not working, sending demo audio data as fallback");
-      
-      // Create a minimal audio chunk with demo_mode flag
-      const demoAudio = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-      if (onAudioData) {
-        onAudioData({ 
-          audio: demoAudio,
-          force_demo_mode: true,
-          model: model
-        });
-      }
+    // Continue animation loop if still recording
+    if (recordingEnabledRef.current) {
+      animationFrameRef.current = requestAnimationFrame(updateMockAudioLevels);
     }
   };
   
@@ -99,27 +87,19 @@ const AudioRecorder = React.forwardRef((props, ref) => {
   const startRecording = async () => {
     try {
       console.log('Starting recording...');
+      recordingEnabledRef.current = true;
       microphoneWorkingRef.current = false;
       
-      // Start fallback demo mode timer just in case
-      if (demoModeTimerRef.current) {
-        clearInterval(demoModeTimerRef.current);
+      // Begin mock audio visualization right away for immediate UI feedback
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
-      demoModeTimerRef.current = setInterval(sendDemoAudioData, 5000);
+      animationFrameRef.current = requestAnimationFrame(updateMockAudioLevels);
       
       try {
         // Check for MediaDevices support
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error('Browser does not support audio recording');
-        }
-        
-        // Get available audio devices
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputs = devices.filter(device => device.kind === 'audioinput');
-        console.log('Available audio input devices:', audioInputs);
-        
-        if (audioInputs.length === 0) {
-          throw new Error('No microphone detected');
         }
         
         // Request microphone access
@@ -129,8 +109,7 @@ const AudioRecorder = React.forwardRef((props, ref) => {
             channelCount: 1,
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true,
-            sampleRate: SAMPLE_RATE
+            autoGainControl: true
           }
         });
         
@@ -138,9 +117,7 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         streamRef.current = stream;
         
         // Create audio context
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: SAMPLE_RATE
-        });
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         audioContextRef.current = audioContext;
         
         // Create an analyzer node for visualizing audio levels
@@ -152,16 +129,24 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(analyser);
         
-        // Initialize the MediaRecorder with appropriate options
+        // Switch to real audio visualization
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        animationFrameRef.current = requestAnimationFrame(updateRealAudioLevels);
+        
+        // Initialize the MediaRecorder
+        const mimeType = 'audio/webm;codecs=opus';
         const options = {
-          mimeType: 'audio/webm;codecs=opus',
-          audioBitsPerSecond: 128000
+          mimeType: mimeType,
+          audioBitsPerSecond: 16000
         };
         
-        mediaRecorderRef.current = new MediaRecorder(stream, options);
+        const mediaRecorder = new MediaRecorder(stream, options);
+        mediaRecorderRef.current = mediaRecorder;
         
         // Set up the data handling for captured audio
-        mediaRecorderRef.current.ondataavailable = async (event) => {
+        mediaRecorder.ondataavailable = async (event) => {
           if (event.data.size > 0) {
             console.log('MediaRecorder captured data chunk, size:', event.data.size);
             
@@ -172,25 +157,24 @@ const AudioRecorder = React.forwardRef((props, ref) => {
             try {
               const reader = new FileReader();
               reader.onloadend = () => {
-                if (onAudioData) {
-                  // Send actual audio data for processing
+                if (onAudioData && recordingEnabledRef.current) {
+                  // Send actual audio data for processing - IMPORTANT: force_demo_mode is FALSE
                   onAudioData({ 
                     audio: reader.result,
                     force_demo_mode: false,
-                    model: model
+                    model: model || 'google'
                   });
                 }
               };
               reader.readAsDataURL(event.data);
             } catch (err) {
               console.error('Error processing audio data:', err);
-              microphoneWorkingRef.current = false;
             }
           }
         };
         
         // Start the media recorder
-        mediaRecorderRef.current.start();
+        mediaRecorder.start();
         
         // Set up interval to collect data periodically
         if (audioProcessingIntervalRef.current) {
@@ -198,41 +182,73 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         }
         
         audioProcessingIntervalRef.current = setInterval(() => {
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          if (mediaRecorderRef.current && 
+              mediaRecorderRef.current.state === 'recording' && 
+              recordingEnabledRef.current) {
             mediaRecorderRef.current.requestData();
           }
-        }, 3000); // Capture every 3 seconds
-        
-        // Start the audio level analyzer
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        animationFrameRef.current = requestAnimationFrame(updateRealAudioLevels);
+        }, 2000); // Capture every 2 seconds
         
         console.log('Recording started successfully with real microphone');
         
       } catch (err) {
         console.warn('Error with microphone setup:', err);
-        microphoneWorkingRef.current = false;
-        
-        // Start the mock audio level updates for the visualizer
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        animationFrameRef.current = requestAnimationFrame(updateMockAudioLevels);
-        
-        console.log('Fallback to demo mode activated');
+        // If we couldn't access the microphone, set up demo mode
+        // This will generate random transcriptions automatically
+        demoModeTimerRef.current = setInterval(() => {
+          if (recordingEnabledRef.current) {
+            // Generate random demo transcription
+            const demoTexts = [
+              "This is a demonstration of the speech recognition system.",
+              "I'm really excited about using this application for my project.",
+              "The weather today is absolutely beautiful outside.",
+              "Can you tell me how well the different speech recognition models compare?",
+              "I'm not sure if my microphone is working correctly but this is a test.",
+              "Speech recognition technology has improved tremendously in recent years.",
+              "I'm feeling happy today and looking forward to learning more about this system.",
+              "This dark mode interface looks amazing with the audio visualizer.",
+              "Could you analyze the sentiment of this message please?",
+              "Using artificial intelligence for speech recognition is fascinating."
+            ];
+            
+            const randomText = demoTexts[Math.floor(Math.random() * demoTexts.length)];
+            const confidence = Math.random() * 0.15 + 0.80; // 0.80-0.95
+            
+            // Create the event
+            const demoEvent = new CustomEvent('demoTranscription', {
+              detail: {
+                text: randomText,
+                confidence: confidence,
+                model: model || 'google',
+                processing_time: Math.floor(Math.random() * 300) + 100,
+                timestamp: Date.now(),
+                demo_mode: true,
+                sentiment: {
+                  polarity: Math.random() * 2 - 1, // -1 to 1
+                  label: Math.random() > 0.5 ? "Positive" : "Neutral",
+                  emoji: Math.random() > 0.5 ? "🙂" : "😐",
+                  confidence: Math.random() * 0.2 + 0.7,
+                  specific_emotion: ["joy", "curiosity", "interest"][Math.floor(Math.random() * 3)]
+                }
+              }
+            });
+            
+            // Dispatch the event
+            document.dispatchEvent(demoEvent);
+            console.log('Demo transcription generated');
+          }
+        }, 3500);
       }
+      
     } catch (error) {
       console.error('Critical error starting recording:', error);
-      // Ensure visualizer works even if everything else fails
-      animationFrameRef.current = requestAnimationFrame(updateMockAudioLevels);
     }
   };
   
   // Function to stop recording
   const stopRecording = () => {
     console.log('Stopping recording...');
+    recordingEnabledRef.current = false;
     
     // Clear intervals
     if (demoModeTimerRef.current) {
@@ -326,7 +342,6 @@ const AudioRecorder = React.forwardRef((props, ref) => {
   // React to model changes
   React.useEffect(() => {
     console.log('Model changed to:', model);
-    // Any model-specific adjustments can go here
   }, [model]);
   
   return null;

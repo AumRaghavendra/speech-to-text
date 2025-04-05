@@ -5,7 +5,6 @@ import numpy as np
 import io
 import speech_recognition as sr
 from vosk import Model, KaldiRecognizer
-# Remove whisper import since we're using the OpenAI API directly
 import json
 from tempfile import NamedTemporaryFile
 import wave
@@ -65,8 +64,22 @@ def get_available_models():
 
 def base64_to_audio(base64_audio):
     """Convert base64 audio data to audio format for processing"""
-    audio_bytes = base64.b64decode(base64_audio.split(',')[1] if ',' in base64_audio else base64_audio)
-    return audio_bytes
+    try:
+        # Extract the actual base64 data after the prefix
+        if ',' in base64_audio:
+            header, encoded = base64_audio.split(",", 1)
+            logger.debug(f"Audio header format: {header}")
+        else:
+            encoded = base64_audio
+        
+        # Decode the base64 data to binary
+        audio_bytes = base64.b64decode(encoded)
+        logger.debug(f"Decoded audio bytes length: {len(audio_bytes)}")
+        
+        return audio_bytes
+    except Exception as e:
+        logger.error(f"Error converting base64 to audio: {str(e)}")
+        return None
 
 def recognize_with_google(audio_bytes):
     """Recognize speech using Google Speech Recognition"""
@@ -87,6 +100,7 @@ def recognize_with_google(audio_bytes):
                 confidence = 0.9  # Placeholder value
                 return text, confidence
     except sr.UnknownValueError:
+        logger.warning("Google Speech Recognition could not understand audio")
         return "", 0.0
     except sr.RequestError as e:
         logger.error(f"Google Speech Recognition service error: {str(e)}")
@@ -165,6 +179,10 @@ def recognize_speech(audio_base64, model="google"):
     try:
         # Convert base64 to audio bytes
         audio_bytes = base64_to_audio(audio_base64)
+        
+        if not audio_bytes:
+            logger.error("Failed to convert base64 to audio data")
+            return "", 0.0
         
         # Process with the selected model
         if model == "google":

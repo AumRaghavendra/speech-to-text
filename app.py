@@ -72,46 +72,55 @@ def handle_audio_data(data):
     """Process incoming audio data from client"""
     try:
         logger.debug("Received audio data from client")
-        audio_data = data['audio']
+        audio_data = data.get('audio')
+        client_model = data.get('model')
         
-        # Log audio data format for debugging
-        if audio_data:
-            audio_format = audio_data.split(',')[0] if ',' in audio_data else "unknown format"
-            audio_length = len(audio_data)
-            logger.debug(f"Audio data received: format={audio_format}, length={audio_length}")
-        else:
+        # Check if we received data
+        if not audio_data:
             logger.warning("Received empty audio data")
             emit('error', {'message': 'Empty audio data received'})
             return
         
+        # Determine which model to use (client-specified or global default)
+        model_to_use = client_model if client_model else active_model
+        logger.debug(f"Using model: {model_to_use}")
+        
+        # Check if we're in forced demo mode
+        use_demo_mode = False
+        if data.get('force_demo_mode') == True:
+            use_demo_mode = True
+            logger.info("Client sent forced demo mode flag")
+        
+        # Log audio data format for debugging
+        audio_format = audio_data.split(',')[0] if ',' in audio_data else "unknown format"
+        audio_length = len(audio_data)
+        logger.debug(f"Audio data received: format={audio_format}, length={audio_length}")
+        
         # Apply noise reduction if enabled
-        if noise_reduction_enabled:
+        if noise_reduction_enabled and not use_demo_mode:
             logger.debug("Applying noise reduction")
             audio_data = nr.reduce_noise(audio_data)
         
-        # Process with the selected speech recognition model
-        logger.debug(f"Processing with {active_model} model")
+        # Start timing the processing
         start_time = pm.get_current_time()
         
-        # Try processing with the selected model
-        use_demo_mode = False
-        if data.get('force_demo_mode', False) or 'force_demo_mode' in data:
-            use_demo_mode = True
-            logger.info("Forced demo mode enabled for this request")
-        
-        try:
-            text, confidence = srs.recognize_speech(audio_data, active_model)
-            if not text:
-                # If no text was recognized but we received data, use demo mode
-                logger.warning("No text recognized despite receiving audio data. Using demo mode.")
+        # Only try actual speech recognition if not in demo mode
+        if not use_demo_mode:
+            try:
+                logger.debug(f"Processing with {model_to_use} model")
+                text, confidence = srs.recognize_speech(audio_data, model_to_use)
+                
+                # If recognition returned no text, switch to demo mode
+                if not text:
+                    logger.warning("No text recognized despite receiving audio data. Using demo mode.")
+                    use_demo_mode = True
+            except Exception as e:
+                logger.error(f"Error in speech recognition: {str(e)}")
                 use_demo_mode = True
-        except Exception as e:
-            logger.error(f"Error in speech recognition, falling back to demo mode: {str(e)}")
-            use_demo_mode = True
         
-        # Use demo mode if needed
+        # Fall back to demo mode if needed
         if use_demo_mode:
-            # Use demo mode with predefined text samples to show functionality
+            # Use demo mode with predefined text samples
             import random
             demo_texts = [
                 "This is a demonstration of the speech recognition system.",
@@ -129,18 +138,20 @@ def handle_audio_data(data):
             confidence = random.uniform(0.75, 0.98)
             logger.info(f"Demo mode text generated: '{text}'")
         
+        # Calculate processing time
         processing_time = pm.calculate_processing_time(start_time)
         logger.debug(f"Recognition result: text='{text}', confidence={confidence}, time={processing_time}ms")
         
+        # Create response with transcription result
         response = {
             'text': text,
-            'model': active_model,
+            'model': model_to_use,
             'confidence': confidence,
             'processing_time': processing_time,
             'demo_mode': use_demo_mode
         }
         
-        # Add sentiment analysis if enabled and text is available
+        # Add sentiment analysis if enabled
         if sentiment_analysis_enabled and text:
             logger.debug("Analyzing sentiment")
             sentiment = sa.analyze_sentiment(text)
@@ -148,7 +159,7 @@ def handle_audio_data(data):
             logger.debug(f"Sentiment analysis result: {sentiment}")
         
         # Update performance metrics
-        pm.update_metrics(active_model, processing_time, confidence, len(text) if text else 0)
+        pm.update_metrics(model_to_use, processing_time, confidence, len(text) if text else 0)
         
         # Send the results back to the client
         emit('transcription_result', response)
@@ -156,7 +167,6 @@ def handle_audio_data(data):
         
         # Send updated performance metrics
         emit('performance_metrics', pm.get_metrics())
-        logger.debug("Sent performance metrics to client")
         
     except Exception as e:
         logger.error(f"Error processing audio data: {str(e)}")
