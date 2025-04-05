@@ -112,55 +112,7 @@ const App = () => {
     });
     
     // Also update the performance metrics
-    const textLength = text.length;
-    const now = new Date().getTime();
-    
-    const newMetrics = { ...performanceMetrics };
-    if (!newMetrics[currentModel]) {
-      newMetrics[currentModel] = {
-        total_time: 0,
-        total_confidence: 0,
-        total_length: 0,
-        count: 0,
-        average_time: 0,
-        average_confidence: 0,
-        average_length: 0
-      };
-    }
-    
-    const modelMetrics = newMetrics[currentModel];
-    modelMetrics.total_time += processing_time;
-    modelMetrics.total_confidence += confidence;
-    modelMetrics.total_length += textLength;
-    modelMetrics.count += 1;
-    modelMetrics.average_time = modelMetrics.total_time / modelMetrics.count;
-    modelMetrics.average_confidence = modelMetrics.total_confidence / modelMetrics.count;
-    modelMetrics.average_length = modelMetrics.total_length / modelMetrics.count;
-    
-    // Add a best_model property based on a weighted score
-    const models = Object.keys(newMetrics);
-    if (models.length > 0) {
-      let bestModel = models[0];
-      let bestScore = 0;
-      
-      models.forEach(model => {
-        if (newMetrics[model].count > 0) {
-          // Calculate a weighted score: confidence (70%) + speed (30%)
-          const timeScore = 1000 / (newMetrics[model].average_time + 100);  // Invert time (faster is better)
-          const confidenceScore = newMetrics[model].average_confidence;
-          const score = (confidenceScore * 0.7) + (timeScore * 0.3);
-          
-          if (score > bestScore) {
-            bestScore = score;
-            bestModel = model;
-          }
-        }
-      });
-      
-      newMetrics.best_model = bestModel;
-    }
-    
-    setPerformanceMetrics(newMetrics);
+    updateMetricsWithResult(result);
   };
   
   // Initialize dark mode on component mount
@@ -169,12 +121,80 @@ const App = () => {
     document.body.classList.add('dark');
   }, []);
   
+  // Function to update metrics with a result
+  const updateMetricsWithResult = (result) => {
+    const model = result.model || currentModel;
+    const confidence = result.confidence || 0.85;
+    const processing_time = result.processing_time || 200;
+    const textLength = result.text ? result.text.length : 20;
+    const words = result.text ? result.text.split(/\s+/).length : 5;
+    
+    setPerformanceMetrics(prevMetrics => {
+      const newMetrics = { ...prevMetrics };
+      
+      // Initialize model metrics if not present
+      if (!newMetrics[model]) {
+        newMetrics[model] = {
+          total_time: 0,
+          total_confidence: 0,
+          total_length: 0,
+          total_words: 0,
+          count: 0,
+          avg_processing_time: 0,
+          avg_confidence: 0,
+          words_per_minute: 0
+        };
+      }
+      
+      // Update metrics for this model
+      const modelMetrics = newMetrics[model];
+      modelMetrics.total_time += processing_time;
+      modelMetrics.total_confidence += confidence;
+      modelMetrics.total_length += textLength;
+      modelMetrics.total_words += words;
+      modelMetrics.count += 1;
+      
+      // Calculate averages
+      modelMetrics.avg_processing_time = modelMetrics.total_time / modelMetrics.count;
+      modelMetrics.avg_confidence = modelMetrics.total_confidence / modelMetrics.count;
+      modelMetrics.words_per_minute = (modelMetrics.total_words / (modelMetrics.total_time / 1000)) * 60;
+      
+      // Determine best model based on a combination of factors
+      if (Object.keys(newMetrics).filter(key => key !== 'best_model').length > 0) {
+        let bestModel = null;
+        let bestScore = -1;
+        
+        Object.keys(newMetrics).filter(key => key !== 'best_model').forEach(mdl => {
+          const m = newMetrics[mdl];
+          if (m.count > 0) {
+            // Score is weighted: 60% confidence, 40% speed (inverse of processing time)
+            const speedScore = 1000 / (m.avg_processing_time + 100); // Higher for faster
+            const confidenceScore = m.avg_confidence; // Higher for more accurate
+            const score = (confidenceScore * 0.6) + (speedScore * 0.4);
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestModel = mdl;
+            }
+          }
+        });
+        
+        if (bestModel) {
+          newMetrics.best_model = bestModel;
+        }
+      }
+      
+      return newMetrics;
+    });
+  };
+  
   // Listen for custom demo transcription events
   React.useEffect(() => {
     // This will handle client-side demo transcriptions
     const handleDemoTranscriptionEvent = (event) => {
       if (event.detail) {
         console.log('Received demo transcription from custom event:', event.detail);
+        
         // Add the transcription result
         setTranscriptionResults(prevResults => {
           const newResults = [...prevResults, event.detail];
@@ -186,7 +206,7 @@ const App = () => {
         });
         
         // Also update metrics
-        updatePerformanceMetrics(event.detail);
+        updateMetricsWithResult(event.detail);
       }
     };
     
@@ -194,6 +214,7 @@ const App = () => {
     const handleTranscriptionResult = (event) => {
       if (event.detail) {
         console.log('Received transcription result from custom event:', event.detail);
+        
         // Add the transcription result
         setTranscriptionResults(prevResults => {
           const newResults = [...prevResults, event.detail];
@@ -205,42 +226,8 @@ const App = () => {
         });
         
         // Also update metrics
-        updatePerformanceMetrics(event.detail);
+        updateMetricsWithResult(event.detail);
       }
-    };
-    
-    // Function to update performance metrics
-    const updatePerformanceMetrics = (result) => {
-      const model = result.model || currentModel;
-      const confidence = result.confidence || 0.85;
-      const processing_time = result.processing_time || 200;
-      const textLength = result.text ? result.text.length : 20;
-      
-      setPerformanceMetrics(prevMetrics => {
-        const newMetrics = { ...prevMetrics };
-        if (!newMetrics[model]) {
-          newMetrics[model] = {
-            total_time: 0,
-            total_confidence: 0,
-            total_length: 0,
-            count: 0,
-            average_time: 0,
-            average_confidence: 0,
-            average_length: 0
-          };
-        }
-        
-        const modelMetrics = newMetrics[model];
-        modelMetrics.total_time += processing_time;
-        modelMetrics.total_confidence += confidence;
-        modelMetrics.total_length += textLength;
-        modelMetrics.count += 1;
-        modelMetrics.average_time = modelMetrics.total_time / modelMetrics.count;
-        modelMetrics.average_confidence = modelMetrics.total_confidence / modelMetrics.count;
-        modelMetrics.average_length = modelMetrics.total_length / modelMetrics.count;
-        
-        return newMetrics;
-      });
     };
     
     // Register event listeners
@@ -276,6 +263,8 @@ const App = () => {
     socket.on('settings', (settings) => {
       console.log('Received settings:', settings);
       setCurrentModel(settings.model);
+      // Also store in global var for demo mode
+      window.currentSelectedModel = settings.model;
       setNoiseReduction(settings.noiseReduction);
       setSentimentAnalysis(settings.sentimentAnalysis);
     });
@@ -292,11 +281,16 @@ const App = () => {
         }
         return newResults;
       });
+      
+      // Update metrics with this result
+      updateMetricsWithResult(result);
     });
     
     socket.on('performance_metrics', (metrics) => {
       console.log('Received performance metrics:', metrics);
-      setPerformanceMetrics(metrics);
+      if (metrics && Object.keys(metrics).length > 0) {
+        setPerformanceMetrics(metrics);
+      }
     });
     
     socket.on('error', (error) => {
@@ -354,6 +348,7 @@ const App = () => {
   const handleModelChange = (model) => {
     console.log(`Switching to model: ${model}`);
     setCurrentModel(model);
+    window.currentSelectedModel = model;
     
     // Update server settings
     updateSettings({ model });
@@ -467,115 +462,88 @@ const App = () => {
                       : 'bg-indigo-600 text-white hover:bg-indigo-700'
                   }`}
                 >
-                  {isRecording ? (
-                    <><i className="fas fa-stop-circle mr-2"></i>Stop</>
-                  ) : (
-                    <><i className="fas fa-microphone mr-2"></i>Start Recording</>
-                  )}
+                  <i className={`fas ${isRecording ? 'fa-stop' : 'fa-microphone'} mr-2`}></i>
+                  {isRecording ? 'Stop Recording' : 'Start Recording'}
                 </button>
               </div>
             </div>
             
             <AudioVisualizer 
               ref={audioVisualizerRef}
-              active={isRecording} 
+              active={isRecording}
             />
             
-            <TranscriptionDisplay 
-              results={transcriptionResults} 
-              sentimentAnalysisEnabled={sentimentAnalysis}
-            />
-            
-            <AudioRecorder 
+            <AudioRecorder
               ref={audioRecorderRef}
               onAudioData={handleAudioData}
               onAudioLevel={handleAudioLevel}
-              isRecording={isRecording}
+              model={currentModel}
+              noiseReduction={noiseReduction}
             />
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 transition-colors duration-300">
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Performance Metrics</h2>
-            <PerformanceMetrics 
-              metrics={performanceMetrics} 
-              onResetMetrics={handleResetMetrics}
+            
+            <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">Settings</h3>
+              <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="noiseReduction"
+                    className="form-checkbox h-5 w-5 text-indigo-600"
+                    checked={noiseReduction}
+                    onChange={handleNoiseReductionToggle}
+                  />
+                  <label htmlFor="noiseReduction" className="ml-2 text-gray-700 dark:text-gray-300">
+                    Noise Reduction
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="sentimentAnalysis"
+                    className="form-checkbox h-5 w-5 text-indigo-600"
+                    checked={sentimentAnalysis}
+                    onChange={handleSentimentAnalysisToggle}
+                  />
+                  <label htmlFor="sentimentAnalysis" className="ml-2 text-gray-700 dark:text-gray-300">
+                    Sentiment Analysis
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <TranscriptionDisplay 
+              results={transcriptionResults}
+              showSentiment={sentimentAnalysis}
             />
           </div>
         </div>
         
         <div className="col-span-1">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300">
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Settings</h2>
-            
-            <div className="mb-6">
-              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Speech Recognition Model</h3>
-              <ModelSelector 
-                currentModel={currentModel} 
-                onModelChange={handleModelChange}
-                bestModel={performanceMetrics.best_model}
-              />
-            </div>
-            
-            <div className="mb-6">
-              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Processing Options</h3>
-              
-              <div className="flex items-center mb-3">
-                <label className="inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={noiseReduction}
-                    onChange={handleNoiseReductionToggle}
-                  />
-                  <div className={`relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600`}></div>
-                  <span className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">Background Noise Reduction</span>
-                </label>
-              </div>
-              
-              <div className="flex items-center">
-                <label className="inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={sentimentAnalysis}
-                    onChange={handleSentimentAnalysisToggle}
-                  />
-                  <div className={`relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600`}></div>
-                  <span className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">Sentiment Analysis</span>
-                </label>
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">About</h3>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                <p className="mb-2">This application compares three different speech recognition models:</p>
-                <ul className="list-disc list-inside mb-2">
-                  <li>Google Speech Recognition - Cloud-based service</li>
-                  <li>Vosk - Offline, on-device model</li>
-                  <li>Whisper - OpenAI's speech recognition model</li>
-                </ul>
-                <p>Features include background noise reduction, sentiment analysis, and real-time performance metrics.</p>
-              </div>
-            </div>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Model Selection</h2>
+            <ModelSelector 
+              currentModel={currentModel}
+              onModelChange={handleModelChange}
+              bestModel={performanceMetrics.best_model}
+            />
           </div>
           
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 transition-colors duration-300">
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Sentiment Analysis</h2>
-            <SentimentVisualizer 
-              results={transcriptionResults} 
-              enabled={sentimentAnalysis}
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Performance Metrics</h2>
+            <PerformanceMetrics 
+              metrics={performanceMetrics}
+              onResetMetrics={handleResetMetrics}
             />
           </div>
         </div>
       </div>
       
-      <footer className="mt-12 text-center text-gray-500 dark:text-gray-400 text-sm">
-        <p>Speech-to-Text Comparison System &copy; {new Date().getFullYear()}</p>
+      <footer className="mt-12 text-center text-gray-600 dark:text-gray-400 text-sm">
+        <p>Speech Recognition Comparison Tool. Comparing Vosk, Whisper, and Google Speech Recognition.</p>
       </footer>
     </div>
   );
 };
 
-// Render the app
+// Mount the app
 ReactDOM.render(<App />, document.getElementById('root'));
