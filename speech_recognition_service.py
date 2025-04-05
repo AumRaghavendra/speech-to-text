@@ -5,10 +5,11 @@ import numpy as np
 import io
 import speech_recognition as sr
 from vosk import Model, KaldiRecognizer
-import whisper
+# Remove whisper import since we're using the OpenAI API directly
 import json
 from tempfile import NamedTemporaryFile
 import wave
+from openai import OpenAI
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -24,12 +25,15 @@ except Exception as e:
     logger.error(f"Error loading Vosk model: {str(e)}")
     vosk_model = None
 
-# Initialize whisper model (small model for faster processing)
+# Initialize OpenAI client for Whisper API
 try:
-    whisper_model = whisper.load_model("base")
-    logger.info("Whisper model loaded successfully")
+    # Initialize the OpenAI client
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    # We'll use the API directly rather than loading the model locally
+    whisper_model = True
+    logger.info("OpenAI Whisper API configuration loaded successfully")
 except Exception as e:
-    logger.error(f"Error loading Whisper model: {str(e)}")
+    logger.error(f"Error configuring OpenAI Whisper API: {str(e)}")
     whisper_model = None
 
 # Initialize speech recognizer for Google
@@ -114,9 +118,9 @@ def recognize_with_vosk(audio_bytes):
         return "", 0.0
 
 def recognize_with_whisper(audio_bytes):
-    """Recognize speech using OpenAI Whisper"""
+    """Recognize speech using OpenAI Whisper API"""
     if whisper_model is None:
-        return "Whisper model not loaded", 0.0
+        return "Whisper API not configured", 0.0
     
     try:
         # Save the audio bytes to a temporary WAV file
@@ -127,15 +131,22 @@ def recognize_with_whisper(audio_bytes):
                 wf.setframerate(16000)
                 wf.writeframes(audio_bytes)
             
-            # Use the temporary file for recognition
-            result = whisper_model.transcribe(temp_audio.name)
-            text = result["text"]
-            # Whisper doesn't provide confidence scores directly
-            confidence = 0.85  # Placeholder value based on segment-level confidence
+            # Use the OpenAI API to transcribe the audio
+            with open(temp_audio.name, "rb") as audio_file:
+                # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+                # do not change this unless explicitly requested by the user
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            
+            text = transcript.text
+            # OpenAI Whisper API doesn't provide confidence scores directly
+            confidence = 0.9  # Placeholder value for API-based transcription
             
             return text, confidence
     except Exception as e:
-        logger.error(f"Error in Whisper Speech Recognition: {str(e)}")
+        logger.error(f"Error in Whisper Speech Recognition API: {str(e)}")
         return "", 0.0
 
 def recognize_speech(audio_base64, model="google"):

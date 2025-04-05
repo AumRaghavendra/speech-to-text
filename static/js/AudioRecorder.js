@@ -19,20 +19,54 @@ const AudioRecorder = React.forwardRef((props, ref) => {
     try {
       console.log('Starting recording...');
       
-      // Get user media
+      // Check for MediaDevices support
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Browser does not support audio recording. Please try a different browser like Chrome or Firefox.');
+      }
+      
+      // Get available audio devices (for debugging)
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+        console.log('Available audio input devices:', audioInputs);
+        
+        if (audioInputs.length === 0) {
+          throw new Error('No microphone detected. Please connect a microphone and try again.');
+        }
+      } catch (deviceError) {
+        console.warn('Could not enumerate devices:', deviceError);
+      }
+      
+      // Get user media with more verbose output
+      console.log('Requesting microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          sampleRate: SAMPLE_RATE,
+          channelCount: 1
         }
       });
+      
+      console.log('Microphone access granted:', stream);
       streamRef.current = stream;
+      
+      // Check if stream is active and has audio tracks
+      const audioTracks = stream.getAudioTracks();
+      console.log('Audio tracks:', audioTracks);
+      
+      if (audioTracks.length === 0) {
+        throw new Error('No audio tracks found in the media stream.');
+      }
+      
+      console.log('Audio track settings:', audioTracks[0].getSettings());
       
       // Create audio context
       const audioContext = new (window.AudioContext || window.webkitAudioContext)({
         sampleRate: SAMPLE_RATE
       });
+      console.log('Audio context created:', audioContext);
       audioContextRef.current = audioContext;
       
       // Create analyser node
@@ -52,30 +86,94 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       analyser.connect(processor);
       processor.connect(audioContext.destination);
       
+      // Create audio level monitor for debugging
+      let silenceCounter = 0;
+      const silenceThreshold = 0.01;
+      
       // Process audio data
       processor.onaudioprocess = (e) => {
         if (!isRecording) return;
         
         const inputData = e.inputBuffer.getChannelData(0);
         
+        // Check audio levels for silence detection
+        const audioLevel = calculateAudioLevel(inputData);
+        
+        if (audioLevel < silenceThreshold) {
+          silenceCounter++;
+          
+          // After 10 consecutive silent chunks, log a warning
+          if (silenceCounter === 10) {
+            console.warn('Possible microphone issue: 10 consecutive silent audio chunks detected. Audio level:', audioLevel);
+          }
+        } else {
+          // Reset counter when sound is detected
+          if (silenceCounter >= 10) {
+            console.log('Audio detected. Current level:', audioLevel);
+          }
+          silenceCounter = 0;
+        }
+        
         // Convert to proper format for transmission
         const buffer = convertFloat32ToInt16(inputData);
         const chunk = encodeChunk(buffer);
         
+        console.log('Audio chunk prepared. Level:', audioLevel, 'Buffer size:', buffer.length);
+        
         // Send chunk to parent component
         if (onAudioData) {
           onAudioData(chunk);
+          // Log every 20th chunk to avoid flooding the console
+          if (Math.random() < 0.05) {
+            console.log('Audio chunk sent to server. Audio level:', audioLevel);
+          }
         }
       };
       
-      // Create media recorder as backup
+      // Create media recorder as backup and for testing
       mediaRecorderRef.current = new MediaRecorder(stream);
+      
+      // Add a data handler for the media recorder to check if it's receiving audio
+      let testChunks = [];
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          testChunks.push(event.data);
+          console.log('MediaRecorder captured data chunk, size:', event.data.size);
+        }
+      };
+      
+      // Start recording a 3-second test clip with MediaRecorder
+      mediaRecorderRef.current.start();
+      setTimeout(() => {
+        // Stop test recording after 3 seconds
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          mediaRecorderRef.current.stop();
+          console.log('Test recording completed');
+          
+          // Check results
+          if (testChunks.length === 0) {
+            console.warn('Test recording produced no data. Potential microphone issue.');
+          } else {
+            console.log('Test recording successful. Total chunks:', testChunks.length);
+          }
+        }
+      }, 3000);
       
       console.log('Recording started successfully');
     } catch (error) {
       console.error('Error starting recording:', error);
-      alert(`Microphone access error: ${error.message}`);
+      alert(`Microphone access error: ${error.message}\n\nPlease check your browser permissions and ensure your microphone is properly connected.`);
     }
+  };
+  
+  // Helper function to calculate audio level (RMS)
+  const calculateAudioLevel = (buffer) => {
+    let sum = 0;
+    for (let i = 0; i < buffer.length; i++) {
+      sum += buffer[i] * buffer[i];
+    }
+    const rms = Math.sqrt(sum / buffer.length);
+    return rms;
   };
   
   // Function to stop recording

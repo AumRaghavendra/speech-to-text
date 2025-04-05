@@ -12,8 +12,19 @@ logger = logging.getLogger(__name__)
 def base64_to_audio_array(base64_audio):
     """Convert base64 audio data to numpy array for processing"""
     try:
+        logger.debug("Converting base64 audio to numpy array")
+        
         # Decode base64 string
-        audio_bytes = base64.b64decode(base64_audio.split(',')[1] if ',' in base64_audio else base64_audio)
+        if not base64_audio:
+            logger.error("Empty base64 audio data")
+            return None, None, None
+            
+        # Extract the base64 part if it's a data URL
+        base64_part = base64_audio.split(',')[1] if ',' in base64_audio else base64_audio
+        logger.debug(f"Base64 data length: {len(base64_part)}")
+        
+        audio_bytes = base64.b64decode(base64_part)
+        logger.debug(f"Decoded audio bytes length: {len(audio_bytes)}")
         
         # Create a wave file from bytes
         with io.BytesIO(audio_bytes) as wav_io:
@@ -24,8 +35,12 @@ def base64_to_audio_array(base64_audio):
                 frame_rate = wav_file.getframerate()
                 n_frames = wav_file.getnframes()
                 
+                logger.debug(f"Audio parameters: channels={channels}, sample_width={sample_width}, "
+                           f"frame_rate={frame_rate}, n_frames={n_frames}")
+                
                 # Read all frames
                 frames = wav_file.readframes(n_frames)
+                logger.debug(f"Read {len(frames)} bytes of audio frames")
                 
                 # Convert to numpy array
                 if sample_width == 2:
@@ -140,14 +155,39 @@ def reduce_noise(base64_audio):
         Base64 encoded audio data with noise reduction applied
     """
     try:
+        logger.debug("Starting noise reduction process")
+        
+        # Check if audio data is too short
+        if base64_audio and len(base64_audio) < 100:
+            logger.warning(f"Audio data too short, length: {len(base64_audio)}")
+            return base64_audio
+            
         # Convert base64 to audio array
+        logger.debug("Converting base64 to audio array")
         audio_array, channels, frame_rate = base64_to_audio_array(base64_audio)
         
         if audio_array is None:
             logger.warning("Could not convert base64 to audio array, returning original")
             return base64_audio
+            
+        # Check if audio array is valid
+        if len(audio_array) == 0:
+            logger.warning("Empty audio array, returning original")
+            return base64_audio
+            
+        # Some basic audio stats for debugging
+        logger.debug(f"Audio array shape: {audio_array.shape}, min: {np.min(audio_array)}, "
+                   f"max: {np.max(audio_array)}, mean: {np.mean(audio_array)}")
+        
+        # Calculate RMS to check if there's actual audio content
+        rms = np.sqrt(np.mean(np.square(audio_array)))
+        logger.debug(f"Audio RMS level: {rms}")
+        
+        if rms < 0.01:
+            logger.warning("Audio level too low, likely silence")
         
         # Apply noise reduction
+        logger.debug("Applying spectral subtraction")
         denoised_array = apply_spectral_subtraction(audio_array, frame_rate)
         
         if denoised_array is None:
@@ -155,9 +195,17 @@ def reduce_noise(base64_audio):
             return base64_audio
         
         # Convert back to base64
+        logger.debug("Converting denoised array back to base64")
         result = audio_array_to_base64(denoised_array, channels, frame_rate)
         
-        return result if result is not None else base64_audio
+        if result is None:
+            logger.warning("Failed to convert denoised array to base64, returning original")
+            return base64_audio
+            
+        logger.debug("Noise reduction completed successfully")
+        return result
     except Exception as e:
         logger.error(f"Error in noise reduction: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return base64_audio  # Return original if error occurs

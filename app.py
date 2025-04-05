@@ -71,16 +71,31 @@ def handle_disconnect():
 def handle_audio_data(data):
     """Process incoming audio data from client"""
     try:
+        logger.debug("Received audio data from client")
         audio_data = data['audio']
+        
+        # Log audio data format for debugging
+        if audio_data:
+            audio_format = audio_data.split(',')[0] if ',' in audio_data else "unknown format"
+            audio_length = len(audio_data)
+            logger.debug(f"Audio data received: format={audio_format}, length={audio_length}")
+        else:
+            logger.warning("Received empty audio data")
+            emit('error', {'message': 'Empty audio data received'})
+            return
         
         # Apply noise reduction if enabled
         if noise_reduction_enabled:
+            logger.debug("Applying noise reduction")
             audio_data = nr.reduce_noise(audio_data)
         
         # Process with the selected speech recognition model
+        logger.debug(f"Processing with {active_model} model")
         start_time = pm.get_current_time()
         text, confidence = srs.recognize_speech(audio_data, active_model)
         processing_time = pm.calculate_processing_time(start_time)
+        
+        logger.debug(f"Recognition result: text='{text}', confidence={confidence}, time={processing_time}ms")
         
         response = {
             'text': text,
@@ -91,20 +106,26 @@ def handle_audio_data(data):
         
         # Add sentiment analysis if enabled and text is available
         if sentiment_analysis_enabled and text:
+            logger.debug("Analyzing sentiment")
             sentiment = sa.analyze_sentiment(text)
             response['sentiment'] = sentiment
+            logger.debug(f"Sentiment analysis result: {sentiment}")
         
         # Update performance metrics
         pm.update_metrics(active_model, processing_time, confidence, len(text) if text else 0)
         
         # Send the results back to the client
         emit('transcription_result', response)
+        logger.debug("Sent transcription result to client")
         
         # Send updated performance metrics
         emit('performance_metrics', pm.get_metrics())
+        logger.debug("Sent performance metrics to client")
         
     except Exception as e:
         logger.error(f"Error processing audio data: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         emit('error', {'message': str(e)})
 
 @socketio.on('get_performance_metrics')
