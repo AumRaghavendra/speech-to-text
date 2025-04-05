@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Demo Recording</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f7f7f7;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-height: 200px;
+        }
+        .demo-text {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f0f7ff;
+            border-left: 3px solid #3498db;
+        }
+    </style>
+</head>
+<body>
+    <h1>Demo Recording Test</h1>
+    <button id="startBtn">Start Demo</button>
+    <button id="stopBtn" disabled>Stop Demo</button>
+    
+    <div id="result">
+        <p>Transcription results will appear here...</p>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const result = document.getElementById('result');
+        let demoInterval;
+        
+        const demoTexts = [
+            "This is a demonstration of the speech recognition system.",
+            "I'm really excited about using this application for my project.",
+            "The weather today is absolutely beautiful outside.",
+            "Can you tell me how well the different speech recognition models compare?",
+            "I'm not sure if my microphone is working correctly but this is a test.",
+            "Speech recognition technology has improved tremendously in recent years.",
+            "I'm feeling happy today and looking forward to learning more about this system.",
+            "This dark mode interface looks amazing with the audio visualizer.",
+            "Could you analyze the sentiment of this message please?",
+            "Using artificial intelligence for speech recognition is fascinating."
+        ];
+
+        function getRandomText() {
+            return demoTexts[Math.floor(Math.random() * demoTexts.length)];
+        }
+
+        function addTranscription() {
+            const text = getRandomText();
+            const div = document.createElement('div');
+            div.className = 'demo-text';
+            div.textContent = text;
+            result.insertBefore(div, result.firstChild);
+        }
+
+        startBtn.addEventListener('click', function() {
+            // Clear previous results
+            result.innerHTML = '';
+            
+            // Add initial transcription
+            addTranscription();
+            
+            // Set up interval for more transcriptions
+            demoInterval = setInterval(addTranscription, 3000);
+            
+            // Toggle buttons
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+        });
+        
+        stopBtn.addEventListener('click', function() {
+            // Clear interval
+            clearInterval(demoInterval);
+            
+            // Toggle buttons
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        });
+    </script>
+</body>
+</html>

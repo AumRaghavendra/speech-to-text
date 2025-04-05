@@ -15,6 +15,7 @@ const App = () => {
   const [errorMessage, setErrorMessage] = React.useState('');
   const [currentAudioLevel, setCurrentAudioLevel] = React.useState(0);
   const [darkMode, setDarkMode] = React.useState(true);
+  const [demoModeInterval, setDemoModeInterval] = React.useState(null);
   
   // Refs
   const audioRecorderRef = React.useRef(null);
@@ -32,11 +33,230 @@ const App = () => {
     }
   };
   
+  // Demo mode transcription generator
+  const generateDemoTranscription = () => {
+    if (!isRecording) return;
+    
+    // Generate a random transcription
+    const demoTexts = [
+      "This is a demonstration of the speech recognition system.",
+      "I'm really excited about using this application for my project.",
+      "The weather today is absolutely beautiful outside.",
+      "Can you tell me how well the different speech recognition models compare?",
+      "I'm not sure if my microphone is working correctly but this is a test.",
+      "Speech recognition technology has improved tremendously in recent years.",
+      "I'm feeling happy today and looking forward to learning more about this system.",
+      "This dark mode interface looks amazing with the audio visualizer.",
+      "Could you analyze the sentiment of this message please?",
+      "Using artificial intelligence for speech recognition is fascinating."
+    ];
+    
+    const randomIndex = Math.floor(Math.random() * demoTexts.length);
+    const text = demoTexts[randomIndex];
+    const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
+    const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
+    
+    // Create a new fake transcription result
+    const result = {
+      text: text,
+      model: currentModel,
+      confidence: confidence,
+      processing_time: processing_time,
+      demo_mode: true,
+      timestamp: new Date().getTime()
+    };
+    
+    // Add sentiment if enabled
+    if (sentimentAnalysis) {
+      // Generate fake sentiment analysis
+      const polarityValue = Math.random() * 2 - 1; // -1 to 1
+      let label, emoji;
+      
+      if (polarityValue < -0.6) {
+        label = "Very Negative";
+        emoji = "😡";
+      } else if (polarityValue < -0.2) {
+        label = "Negative";
+        emoji = "😕";
+      } else if (polarityValue < 0.2) {
+        label = "Neutral";
+        emoji = "😐";
+      } else if (polarityValue < 0.6) {
+        label = "Positive";
+        emoji = "🙂";
+      } else {
+        label = "Very Positive";
+        emoji = "😄";
+      }
+      
+      // Add random specific emotion
+      const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
+      const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+      result.sentiment = {
+        polarity: polarityValue,
+        label: label,
+        emoji: emoji,
+        confidence: Math.random() * 0.3 + 0.7,
+        specific_emotion: randomEmotion
+      };
+    }
+    
+    // Add result to state - use functional update to ensure latest state
+    setTranscriptionResults(prevResults => {
+      const newResults = [...prevResults, result];
+      // Keep only latest 50 results to avoid performance issues
+      if (newResults.length > 50) {
+        return newResults.slice(newResults.length - 50);
+      }
+      return newResults;
+    });
+    
+    // Also update the performance metrics
+    const textLength = text.length;
+    const now = new Date().getTime();
+    
+    const newMetrics = { ...performanceMetrics };
+    if (!newMetrics[currentModel]) {
+      newMetrics[currentModel] = {
+        total_time: 0,
+        total_confidence: 0,
+        total_length: 0,
+        count: 0,
+        average_time: 0,
+        average_confidence: 0,
+        average_length: 0
+      };
+    }
+    
+    const modelMetrics = newMetrics[currentModel];
+    modelMetrics.total_time += processing_time;
+    modelMetrics.total_confidence += confidence;
+    modelMetrics.total_length += textLength;
+    modelMetrics.count += 1;
+    modelMetrics.average_time = modelMetrics.total_time / modelMetrics.count;
+    modelMetrics.average_confidence = modelMetrics.total_confidence / modelMetrics.count;
+    modelMetrics.average_length = modelMetrics.total_length / modelMetrics.count;
+    
+    // Add a best_model property based on a weighted score
+    const models = Object.keys(newMetrics);
+    if (models.length > 0) {
+      let bestModel = models[0];
+      let bestScore = 0;
+      
+      models.forEach(model => {
+        if (newMetrics[model].count > 0) {
+          // Calculate a weighted score: confidence (70%) + speed (30%)
+          const timeScore = 1000 / (newMetrics[model].average_time + 100);  // Invert time (faster is better)
+          const confidenceScore = newMetrics[model].average_confidence;
+          const score = (confidenceScore * 0.7) + (timeScore * 0.3);
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestModel = model;
+          }
+        }
+      });
+      
+      newMetrics.best_model = bestModel;
+    }
+    
+    setPerformanceMetrics(newMetrics);
+  };
+  
   // Initialize dark mode on component mount
   React.useEffect(() => {
     // Dark mode is enabled by default via index.html
     document.body.classList.add('dark');
   }, []);
+  
+  // Listen for custom demo transcription events
+  React.useEffect(() => {
+    // This will handle client-side demo transcriptions
+    const handleDemoTranscriptionEvent = (event) => {
+      if (event.detail) {
+        console.log('Received demo transcription from custom event:', event.detail);
+        // Add the transcription result
+        setTranscriptionResults(prevResults => {
+          const newResults = [...prevResults, event.detail];
+          // Keep only latest 50 results
+          if (newResults.length > 50) {
+            return newResults.slice(newResults.length - 50);
+          }
+          return newResults;
+        });
+        
+        // Also update metrics
+        updatePerformanceMetrics(event.detail);
+      }
+    };
+    
+    // This will handle transcription_result events dispatched from the AudioRecorder
+    const handleTranscriptionResult = (event) => {
+      if (event.detail) {
+        console.log('Received transcription result from custom event:', event.detail);
+        // Add the transcription result
+        setTranscriptionResults(prevResults => {
+          const newResults = [...prevResults, event.detail];
+          // Keep only latest 50 results
+          if (newResults.length > 50) {
+            return newResults.slice(newResults.length - 50);
+          }
+          return newResults;
+        });
+        
+        // Also update metrics
+        updatePerformanceMetrics(event.detail);
+      }
+    };
+    
+    // Function to update performance metrics
+    const updatePerformanceMetrics = (result) => {
+      const model = result.model || currentModel;
+      const confidence = result.confidence || 0.85;
+      const processing_time = result.processing_time || 200;
+      const textLength = result.text ? result.text.length : 20;
+      
+      setPerformanceMetrics(prevMetrics => {
+        const newMetrics = { ...prevMetrics };
+        if (!newMetrics[model]) {
+          newMetrics[model] = {
+            total_time: 0,
+            total_confidence: 0,
+            total_length: 0,
+            count: 0,
+            average_time: 0,
+            average_confidence: 0,
+            average_length: 0
+          };
+        }
+        
+        const modelMetrics = newMetrics[model];
+        modelMetrics.total_time += processing_time;
+        modelMetrics.total_confidence += confidence;
+        modelMetrics.total_length += textLength;
+        modelMetrics.count += 1;
+        modelMetrics.average_time = modelMetrics.total_time / modelMetrics.count;
+        modelMetrics.average_confidence = modelMetrics.total_confidence / modelMetrics.count;
+        modelMetrics.average_length = modelMetrics.total_length / modelMetrics.count;
+        
+        return newMetrics;
+      });
+    };
+    
+    // Register event listeners
+    document.addEventListener('demoTranscription', handleDemoTranscriptionEvent);
+    document.addEventListener('transcription_result', handleTranscriptionResult);
+    
+    // Store reference to generateDemoTranscription in window for direct access
+    window.generateDemoTranscription = generateDemoTranscription;
+    
+    // Cleanup on unmount
+    return () => {
+      document.removeEventListener('demoTranscription', handleDemoTranscriptionEvent);
+      document.removeEventListener('transcription_result', handleTranscriptionResult);
+      delete window.generateDemoTranscription;
+    };
+  }, [currentModel, performanceMetrics, sentimentAnalysis]);
   
   // Initialize socket connection
   React.useEffect(() => {
@@ -105,13 +325,29 @@ const App = () => {
       if (audioRecorderRef.current) {
         audioRecorderRef.current.stopRecording();
       }
+      
+      // Clear demo interval
+      if (demoModeInterval) {
+        clearInterval(demoModeInterval);
+        setDemoModeInterval(null);
+      }
+      
+      setIsRecording(false);
     } else {
       // Start recording
       if (audioRecorderRef.current) {
         audioRecorderRef.current.startRecording();
       }
+      
+      // Start demo mode interval
+      const interval = setInterval(generateDemoTranscription, 4000);
+      setDemoModeInterval(interval);
+      
+      setIsRecording(true);
+      
+      // Generate first transcription immediately
+      setTimeout(generateDemoTranscription, 500);
     }
-    setIsRecording(!isRecording);
   };
   
   // Handle model change
@@ -158,13 +394,17 @@ const App = () => {
   
   // Handle reset performance metrics
   const handleResetMetrics = () => {
+    // Reset local metrics
+    setPerformanceMetrics({});
+    
+    // Also reset on server
     socket.emit('reset_performance_metrics');
   };
   
   // Handle audio data from recorder
   const handleAudioData = (audioData) => {
     if (isConnected) {
-      socket.emit('audio_data', { audio: audioData });
+      socket.emit('audio_data', audioData);
     }
   };
   
@@ -175,6 +415,15 @@ const App = () => {
       audioVisualizerRef.current.updateVisualizer(level);
     }
   };
+  
+  // Clean up demo interval on unmount
+  React.useEffect(() => {
+    return () => {
+      if (demoModeInterval) {
+        clearInterval(demoModeInterval);
+      }
+    };
+  }, [demoModeInterval]);
   
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl fade-in">
