@@ -13,9 +13,30 @@ const App = () => {
   const [performanceMetrics, setPerformanceMetrics] = React.useState({});
   const [isConnected, setIsConnected] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState('');
+  const [currentAudioLevel, setCurrentAudioLevel] = React.useState(0);
+  const [darkMode, setDarkMode] = React.useState(true);
   
-  // Ref for audio recorder
+  // Refs
   const audioRecorderRef = React.useRef(null);
+  const audioVisualizerRef = React.useRef(null);
+  
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    
+    if (newDarkMode) {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  };
+  
+  // Initialize dark mode on component mount
+  React.useEffect(() => {
+    // Dark mode is enabled by default via index.html
+    document.body.classList.add('dark');
+  }, []);
   
   // Initialize socket connection
   React.useEffect(() => {
@@ -147,32 +168,53 @@ const App = () => {
     }
   };
   
+  // Update audio levels for visualizer
+  const handleAudioLevel = (level) => {
+    setCurrentAudioLevel(level);
+    if (audioVisualizerRef.current) {
+      audioVisualizerRef.current.updateVisualizer(level);
+    }
+  };
+  
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl fade-in">
       <header className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-indigo-700 mb-2">Speech-to-Text Comparison</h1>
-        <p className="text-lg text-gray-600">
+        <h1 className="text-4xl font-bold text-indigo-400 dark:text-indigo-300 mb-2">Speech-to-Text Comparison</h1>
+        <p className="text-lg text-gray-600 dark:text-gray-300">
           Compare Vosk, Whisper, and Google Speech Recognition in real-time
         </p>
+        <div className="absolute top-4 right-4">
+          <button 
+            onClick={toggleDarkMode}
+            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+            aria-label="Toggle dark mode"
+          >
+            {darkMode ? (
+              <i className="fas fa-sun"></i>
+            ) : (
+              <i className="fas fa-moon"></i>
+            )}
+          </button>
+        </div>
       </header>
       
       {errorMessage && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+        <div className="bg-red-100 dark:bg-red-900 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-4 mb-6" role="alert">
           <p>{errorMessage}</p>
         </div>
       )}
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="col-span-1 lg:col-span-2">
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-semibold text-gray-800">Real-Time Transcription</h2>
+              <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Real-Time Transcription</h2>
               <div>
                 <button
                   onClick={toggleRecording}
                   className={`px-4 py-2 rounded-lg font-medium transition-all ${
                     isRecording 
-                      ? 'bg-red-600 text-white recording-pulse' 
+                      ? 'bg-red-600 text-white' 
                       : 'bg-indigo-600 text-white hover:bg-indigo-700'
                   }`}
                 >
@@ -185,15 +227,10 @@ const App = () => {
               </div>
             </div>
             
-            {isRecording && (
-              <div className="audio-wave mb-4">
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            )}
+            <AudioVisualizer 
+              ref={audioVisualizerRef}
+              active={isRecording} 
+            />
             
             <TranscriptionDisplay 
               results={transcriptionResults} 
@@ -203,12 +240,13 @@ const App = () => {
             <AudioRecorder 
               ref={audioRecorderRef}
               onAudioData={handleAudioData}
+              onAudioLevel={handleAudioLevel}
               isRecording={isRecording}
             />
           </div>
           
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">Performance Metrics</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 transition-colors duration-300">
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Performance Metrics</h2>
             <PerformanceMetrics 
               metrics={performanceMetrics} 
               onResetMetrics={handleResetMetrics}
@@ -217,11 +255,11 @@ const App = () => {
         </div>
         
         <div className="col-span-1">
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">Settings</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300">
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Settings</h2>
             
             <div className="mb-6">
-              <h3 className="text-lg font-medium text-gray-700 mb-3">Speech Recognition Model</h3>
+              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Speech Recognition Model</h3>
               <ModelSelector 
                 currentModel={currentModel} 
                 onModelChange={handleModelChange}
@@ -230,7 +268,7 @@ const App = () => {
             </div>
             
             <div className="mb-6">
-              <h3 className="text-lg font-medium text-gray-700 mb-3">Processing Options</h3>
+              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Processing Options</h3>
               
               <div className="flex items-center mb-3">
                 <label className="inline-flex items-center cursor-pointer">
@@ -240,8 +278,8 @@ const App = () => {
                     checked={noiseReduction}
                     onChange={handleNoiseReductionToggle}
                   />
-                  <div className={`relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600`}></div>
-                  <span className="ml-3 text-sm font-medium text-gray-700">Background Noise Reduction</span>
+                  <div className={`relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600`}></div>
+                  <span className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">Background Noise Reduction</span>
                 </label>
               </div>
               
@@ -253,15 +291,15 @@ const App = () => {
                     checked={sentimentAnalysis}
                     onChange={handleSentimentAnalysisToggle}
                   />
-                  <div className={`relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600`}></div>
-                  <span className="ml-3 text-sm font-medium text-gray-700">Sentiment Analysis</span>
+                  <div className={`relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600`}></div>
+                  <span className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">Sentiment Analysis</span>
                 </label>
               </div>
             </div>
             
             <div>
-              <h3 className="text-lg font-medium text-gray-700 mb-3">About</h3>
-              <div className="text-sm text-gray-600">
+              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">About</h3>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
                 <p className="mb-2">This application compares three different speech recognition models:</p>
                 <ul className="list-disc list-inside mb-2">
                   <li>Google Speech Recognition - Cloud-based service</li>
@@ -273,8 +311,8 @@ const App = () => {
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">Sentiment Analysis</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 transition-colors duration-300">
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Sentiment Analysis</h2>
             <SentimentVisualizer 
               results={transcriptionResults} 
               enabled={sentimentAnalysis}
@@ -283,7 +321,7 @@ const App = () => {
         </div>
       </div>
       
-      <footer className="mt-12 text-center text-gray-500 text-sm">
+      <footer className="mt-12 text-center text-gray-500 dark:text-gray-400 text-sm">
         <p>Speech-to-Text Comparison System &copy; {new Date().getFullYear()}</p>
       </footer>
     </div>

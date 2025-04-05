@@ -5,8 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Speech-to-Text Comparison</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS with dark mode -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    },
+                    animation: {
+                        'audio-wave': 'audio-wave 1.2s ease-in-out infinite',
+                        'gradient-x': 'gradient-x 15s ease infinite',
+                    },
+                    keyframes: {
+                        'audio-wave': {
+                            '0%, 100%': { transform: 'scaleY(0.5)' },
+                            '50%': { transform: 'scaleY(1.5)' },
+                        },
+                        'gradient-x': {
+                            '0%, 100%': {
+                                'background-size': '200% 200%',
+                                'background-position': 'left center'
+                            },
+                            '50%': {
+                                'background-size': '200% 200%',
+                                'background-position': 'right center'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -15,18 +58,122 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     
     <!-- Socket.IO for real-time communication -->
-    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     
     <!-- Custom styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    
+    <style>
+        /* Audio wave animation for visualizer */
+        .audio-visualizer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 60px;
+        }
+        
+        .audio-visualizer span {
+            display: inline-block;
+            width: 4px;
+            margin: 0 2px;
+            border-radius: 2px;
+            background: linear-gradient(to bottom, #38bdf8, #0ea5e9);
+        }
+        
+        .dark .audio-visualizer span {
+            background: linear-gradient(to bottom, #38bdf8, #0ea5e9);
+        }
+        
+        .audio-visualizer span:nth-child(1) { animation-delay: 0.1s; }
+        .audio-visualizer span:nth-child(2) { animation-delay: 0.2s; }
+        .audio-visualizer span:nth-child(3) { animation-delay: 0.3s; }
+        .audio-visualizer span:nth-child(4) { animation-delay: 0.4s; }
+        .audio-visualizer span:nth-child(5) { animation-delay: 0.5s; }
+        .audio-visualizer span:nth-child(6) { animation-delay: 0.4s; }
+        .audio-visualizer span:nth-child(7) { animation-delay: 0.3s; }
+        .audio-visualizer span:nth-child(8) { animation-delay: 0.2s; }
+        .audio-visualizer span:nth-child(9) { animation-delay: 0.1s; }
+        .audio-visualizer span:nth-child(10) { animation-delay: 0s; }
+        .audio-visualizer span:nth-child(11) { animation-delay: 0.1s; }
+        .audio-visualizer span:nth-child(12) { animation-delay: 0.2s; }
+        .audio-visualizer span:nth-child(13) { animation-delay: 0.3s; }
+        .audio-visualizer span:nth-child(14) { animation-delay: 0.4s; }
+        .audio-visualizer span:nth-child(15) { animation-delay: 0.5s; }
+        
+        .audio-visualizer.active span {
+            animation: audio-wave 1.2s ease-in-out infinite;
+            height: 30px;
+        }
+        
+        .audio-visualizer.idle span {
+            height: 5px;
+        }
+        
+        /* Gradient background for dark mode */
+        .gradient-dark {
+            background: linear-gradient(to right, #0f172a, #1e293b, #0f172a);
+            background-size: 200% 200%;
+            animation: gradient-x 15s ease infinite;
+        }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen">
+<body class="bg-gray-50 dark:bg-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
     <div id="root"></div>
 
     <!-- React and ReactDOM -->
     <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Waveform visualizer component -->
+    <script type="text/babel">
+        const AudioVisualizer = React.forwardRef((props, ref) => {
+            const { active } = props;
+            const canvasRef = React.useRef(null);
+            const visualizerRef = React.useRef(null);
+            const [bars, setBars] = React.useState(Array(15).fill(5));
+            
+            React.useImperativeHandle(ref, () => ({
+                updateVisualizer: (audioLevel) => {
+                    if (active && audioLevel !== undefined) {
+                        // Scale the audio level to reasonable bar heights
+                        const scaledLevel = Math.min(Math.max(audioLevel * 50, 0), 50);
+                        
+                        // Create a dynamic bars array with varying heights based on audio level
+                        const newBars = bars.map((_, i) => {
+                            // Add some randomness for a more natural visualization
+                            const randomFactor = Math.random() * 0.5 + 0.5; 
+                            return Math.max(5, scaledLevel * randomFactor);
+                        });
+                        
+                        setBars(newBars);
+                    } else {
+                        // Reset to minimal height when not active
+                        setBars(Array(15).fill(5));
+                    }
+                }
+            }));
+            
+            // Render the audio visualization bars
+            const renderVisualizer = () => {
+                return React.createElement(
+                    "div",
+                    { 
+                        className: `audio-visualizer ${active ? 'active' : 'idle'} mb-4`,
+                        ref: visualizerRef
+                    },
+                    bars.map((height, i) => 
+                        React.createElement("span", { 
+                            key: i,
+                            style: { height: `${height}px` }
+                        })
+                    )
+                );
+            };
+            
+            return renderVisualizer();
+        });
+    </script>
     
     <!-- Module Scripts -->
     <script src="{{ url_for('static', filename='js/AudioRecorder.js') }}" type="text/babel"></script>
@@ -38,5 +185,10 @@
     
     <!-- Main App -->
     <script src="{{ url_for('static', filename='js/app.js') }}" type="text/babel"></script>
+    
+    <script>
+        // Enable dark mode by default
+        document.body.classList.add('dark');
+    </script>
 </body>
 </html>
