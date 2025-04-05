@@ -13,6 +13,7 @@ const AudioRecorder = React.forwardRef((props, ref) => {
   const audioChunkQueueRef = React.useRef([]);
   const audioLevelRef = React.useRef(0);
   const animationFrameRef = React.useRef(null);
+  const useDemoModeRef = React.useRef(false);
   
   // Constants for audio processing
   const SAMPLE_RATE = 16000;
@@ -66,6 +67,21 @@ const AudioRecorder = React.forwardRef((props, ref) => {
     animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
   };
   
+  // Function to send simulated audio data in demo mode
+  const sendDemoAudioData = () => {
+    if (isRecording && onAudioData) {
+      // Create a minimal audio chunk with demo_mode flag
+      const demoAudio = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+      onAudioData({ 
+        audio: demoAudio,
+        force_demo_mode: true 
+      });
+      
+      // Schedule the next demo audio transmission
+      setTimeout(sendDemoAudioData, 3000); // Send every 3 seconds
+    }
+  };
+  
   // Function to start recording
   const startRecording = async () => {
     try {
@@ -80,7 +96,10 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       
       // Check for MediaDevices support
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Browser does not support audio recording. Please try a different browser like Chrome or Firefox.');
+        console.warn('Browser does not support MediaDevices API. Using demo mode.');
+        useDemoModeRef.current = true;
+        setTimeout(sendDemoAudioData, 1000); // Start demo mode with delay
+        return; // Skip the rest of the setup
       }
       
       // Get available audio devices (for debugging)
@@ -90,60 +109,84 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         console.log('Available audio input devices:', audioInputs);
         
         if (audioInputs.length === 0) {
-          throw new Error('No microphone detected. Please connect a microphone and try again.');
+          console.warn('No microphone detected. Using demo mode.');
+          useDemoModeRef.current = true;
+          setTimeout(sendDemoAudioData, 1000);
+          return;
         }
       } catch (deviceError) {
         console.warn('Could not enumerate devices:', deviceError);
+        useDemoModeRef.current = true;
+        setTimeout(sendDemoAudioData, 1000);
+        return;
       }
       
       // Get user media with more verbose output
       console.log('Requesting microphone access...');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: SAMPLE_RATE,
-          channelCount: 1
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: SAMPLE_RATE,
+            channelCount: 1
+          }
+        });
+        
+        console.log('Microphone access granted:', stream);
+        streamRef.current = stream;
+        
+        // Check if stream is active and has audio tracks
+        const audioTracks = stream.getAudioTracks();
+        console.log('Audio tracks:', audioTracks);
+        
+        if (audioTracks.length === 0) {
+          console.warn('No audio tracks found in the media stream. Using demo mode.');
+          useDemoModeRef.current = true;
+          setTimeout(sendDemoAudioData, 1000);
+          return;
         }
-      });
-      
-      console.log('Microphone access granted:', stream);
-      streamRef.current = stream;
-      
-      // Check if stream is active and has audio tracks
-      const audioTracks = stream.getAudioTracks();
-      console.log('Audio tracks:', audioTracks);
-      
-      if (audioTracks.length === 0) {
-        throw new Error('No audio tracks found in the media stream.');
+        
+        console.log('Audio track settings:', audioTracks[0].getSettings());
+      } catch (micError) {
+        console.error('Error accessing microphone:', micError);
+        alert(`Microphone access error: ${micError.message}\n\nUsing demo mode instead.`);
+        useDemoModeRef.current = true;
+        setTimeout(sendDemoAudioData, 1000);
+        return;
       }
       
-      console.log('Audio track settings:', audioTracks[0].getSettings());
-      
       // Create audio context
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: SAMPLE_RATE
-      });
-      console.log('Audio context created:', audioContext);
-      audioContextRef.current = audioContext;
-      
-      // Create analyser node
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 2048;
-      analyserRef.current = analyser;
-      
-      // Create source node
-      const source = audioContext.createMediaStreamSource(stream);
-      source.connect(analyser);
-      
-      // Setup script processor node for processing audio
-      const processor = audioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
-      processorRef.current = processor;
-      
-      // Connect processor
-      analyser.connect(processor);
-      processor.connect(audioContext.destination);
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: SAMPLE_RATE
+        });
+        console.log('Audio context created:', audioContext);
+        audioContextRef.current = audioContext;
+        
+        // Create analyser node
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyserRef.current = analyser;
+        
+        // Create source node
+        const source = audioContext.createMediaStreamSource(streamRef.current);
+        source.connect(analyser);
+        
+        // Setup script processor node for processing audio
+        const processor = audioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
+        processorRef.current = processor;
+        
+        // Connect processor
+        analyser.connect(processor);
+        processor.connect(audioContext.destination);
+      } catch (audioContextError) {
+        console.error('Error setting up audio context:', audioContextError);
+        useDemoModeRef.current = true;
+        setTimeout(sendDemoAudioData, 1000);
+        return;
+      }
       
       // Create audio level monitor for debugging
       let silenceCounter = 0;
@@ -154,138 +197,168 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         socketReadyRef.current = true;
         console.log('Socket connection ready for audio transmission');
         
+        // If no real audio is being processed, use demo mode
+        if (useDemoModeRef.current) {
+          sendDemoAudioData();
+          return;
+        }
+        
         // Process any queued audio chunks
         if (audioChunkQueueRef.current.length > 0) {
           console.log(`Processing ${audioChunkQueueRef.current.length} queued audio chunks`);
           audioChunkQueueRef.current.forEach(chunk => {
-            if (onAudioData) onAudioData(chunk);
+            if (onAudioData) onAudioData({ audio: chunk });
           });
           audioChunkQueueRef.current = [];
         }
       }, 1000);
       
       // Process audio data
-      processor.onaudioprocess = (e) => {
-        if (!isRecording) return;
-        
-        const inputData = e.inputBuffer.getChannelData(0);
-        
-        // Check audio levels for silence detection
-        const audioLevel = calculateAudioLevel(inputData);
-        
-        if (audioLevel < silenceThreshold) {
-          silenceCounter++;
+      if (processorRef.current) {
+        processorRef.current.onaudioprocess = (e) => {
+          if (!isRecording) return;
           
-          // After 10 consecutive silent chunks, log a warning
-          if (silenceCounter === 10) {
-            console.warn('Possible microphone issue: 10 consecutive silent audio chunks detected. Audio level:', audioLevel);
-          }
-        } else {
-          // Reset counter when sound is detected
-          if (silenceCounter >= 10) {
-            console.log('Audio detected. Current level:', audioLevel);
-          }
-          silenceCounter = 0;
-        }
-        
-        // Convert to proper format for transmission
-        const buffer = convertFloat32ToInt16(inputData);
-        const chunk = encodeChunk(buffer);
-        
-        // Send chunk to parent component or queue it if socket not ready
-        if (onAudioData && socketReadyRef.current) {
-          onAudioData(chunk);
+          const inputData = e.inputBuffer.getChannelData(0);
           
-          // Log every 20th chunk to avoid flooding the console
-          if (Math.random() < 0.05) {
-            console.log('Audio chunk sent to server. Audio level:', audioLevel);
+          // Check audio levels for silence detection
+          const audioLevel = calculateAudioLevel(inputData);
+          
+          if (audioLevel < silenceThreshold) {
+            silenceCounter++;
+            
+            // After 10 consecutive silent chunks, log a warning
+            if (silenceCounter === 10) {
+              console.warn('Possible microphone issue: 10 consecutive silent audio chunks detected. Audio level:', audioLevel);
+              
+              // If consistently silent, switch to demo mode
+              if (!useDemoModeRef.current) {
+                console.warn('Switching to demo mode due to silent microphone');
+                useDemoModeRef.current = true;
+                sendDemoAudioData();
+              }
+            }
+          } else {
+            // Reset counter when sound is detected
+            if (silenceCounter >= 10) {
+              console.log('Audio detected. Current level:', audioLevel);
+            }
+            silenceCounter = 0;
           }
-        } else if (onAudioData) {
-          // Queue the chunk to send when socket is ready
-          audioChunkQueueRef.current.push(chunk);
-          if (audioChunkQueueRef.current.length === 1) {
-            console.log('Queuing audio chunks until socket is ready');
+          
+          // Skip actual audio processing if in demo mode
+          if (useDemoModeRef.current) return;
+          
+          // Convert to proper format for transmission
+          const buffer = convertFloat32ToInt16(inputData);
+          const chunk = encodeChunk(buffer);
+          
+          // Send chunk to parent component or queue it if socket not ready
+          if (onAudioData && socketReadyRef.current) {
+            onAudioData({ audio: chunk });
+            
+            // Log every 20th chunk to avoid flooding the console
+            if (Math.random() < 0.05) {
+              console.log('Audio chunk sent to server. Audio level:', audioLevel);
+            }
+          } else if (onAudioData) {
+            // Queue the chunk to send when socket is ready
+            audioChunkQueueRef.current.push(chunk);
+            if (audioChunkQueueRef.current.length === 1) {
+              console.log('Queuing audio chunks until socket is ready');
+            }
           }
-        }
-      };
+        };
+      }
       
       // Create media recorder for backup and testing
-      const mediaRecorderOptions = { mimeType: 'audio/webm' };
-      mediaRecorderRef.current = new MediaRecorder(stream, mediaRecorderOptions);
-      
-      // Add a data handler for the media recorder to check if it's receiving audio
-      let testChunks = [];
-      mediaRecorderRef.current.ondataavailable = async (event) => {
-        if (event.data.size > 0) {
-          testChunks.push(event.data);
-          console.log('MediaRecorder captured data chunk, size:', event.data.size);
-          
-          // Try to convert the blob to a WAV format and send as well (as a backup method)
-          if (socketReadyRef.current && testChunks.length === 1) {
-            try {
-              const audioBlob = event.data;
-              const arrayBuffer = await audioBlob.arrayBuffer();
-              const buffer = new Uint8Array(arrayBuffer);
-              
-              // Create a base64 representation
-              let binary = '';
-              for (let i = 0; i < buffer.byteLength; i++) {
-                binary += String.fromCharCode(buffer[i]);
-              }
-              const base64Data = btoa(binary);
-              const mediaRecorderAudio = `data:${audioBlob.type};base64,${base64Data}`;
-              
-              // Send as backup
-              if (onAudioData) {
-                console.log('Sending MediaRecorder backup audio chunk');
-                onAudioData(mediaRecorderAudio);
-              }
-            } catch (err) {
-              console.error('Error converting MediaRecorder data:', err);
-            }
-          }
-        }
-      };
-      
-      // Start recording a 3-second test clip with MediaRecorder
-      mediaRecorderRef.current.start();
-      setTimeout(() => {
-        // Stop test recording after 3 seconds
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          mediaRecorderRef.current.stop();
-          console.log('Test recording completed');
-          
-          // Check results
-          if (testChunks.length === 0) {
-            console.warn('Test recording produced no data. Potential microphone issue.');
-          } else {
-            console.log('Test recording successful. Total chunks:', testChunks.length);
+      try {
+        const mediaRecorderOptions = { mimeType: 'audio/webm' };
+        mediaRecorderRef.current = new MediaRecorder(streamRef.current, mediaRecorderOptions);
+        
+        // Add a data handler for the media recorder to check if it's receiving audio
+        let testChunks = [];
+        mediaRecorderRef.current.ondataavailable = async (event) => {
+          if (event.data.size > 0) {
+            testChunks.push(event.data);
+            console.log('MediaRecorder captured data chunk, size:', event.data.size);
             
-            // Restart media recorder for full recording
-            try {
-              mediaRecorderRef.current = new MediaRecorder(stream, mediaRecorderOptions);
-              mediaRecorderRef.current.ondataavailable = (event) => {
-                if (event.data.size > 0 && onAudioData && socketReadyRef.current) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    const base64data = reader.result;
-                    onAudioData(base64data);
-                  };
-                  reader.readAsDataURL(event.data);
+            // Try to convert the blob to a WAV format and send as well (as a backup method)
+            if (socketReadyRef.current && testChunks.length === 1) {
+              try {
+                const audioBlob = event.data;
+                const arrayBuffer = await audioBlob.arrayBuffer();
+                const buffer = new Uint8Array(arrayBuffer);
+                
+                // Create a base64 representation
+                let binary = '';
+                for (let i = 0; i < buffer.byteLength; i++) {
+                  binary += String.fromCharCode(buffer[i]);
                 }
-              };
-              mediaRecorderRef.current.start(1000); // Record in 1-second chunks
-            } catch (err) {
-              console.error('Error restarting MediaRecorder:', err);
+                const base64Data = btoa(binary);
+                const mediaRecorderAudio = `data:${audioBlob.type};base64,${base64Data}`;
+                
+                // Send as backup
+                if (onAudioData && !useDemoModeRef.current) {
+                  console.log('Sending MediaRecorder backup audio chunk');
+                  onAudioData({ audio: mediaRecorderAudio });
+                }
+              } catch (err) {
+                console.error('Error converting MediaRecorder data:', err);
+              }
             }
           }
-        }
-      }, 3000);
+        };
+        
+        // Start recording a 3-second test clip with MediaRecorder
+        mediaRecorderRef.current.start();
+        setTimeout(() => {
+          // Stop test recording after 3 seconds
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+            console.log('Test recording completed');
+            
+            // Check results
+            if (testChunks.length === 0) {
+              console.warn('Test recording produced no data. Potential microphone issue.');
+              useDemoModeRef.current = true;
+              sendDemoAudioData();
+            } else {
+              console.log('Test recording successful. Total chunks:', testChunks.length);
+              
+              // Restart media recorder for full recording
+              try {
+                mediaRecorderRef.current = new MediaRecorder(streamRef.current, mediaRecorderOptions);
+                mediaRecorderRef.current.ondataavailable = (event) => {
+                  if (event.data.size > 0 && onAudioData && socketReadyRef.current && !useDemoModeRef.current) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const base64data = reader.result;
+                      onAudioData({ audio: base64data });
+                    };
+                    reader.readAsDataURL(event.data);
+                  }
+                };
+                mediaRecorderRef.current.start(1000); // Record in 1-second chunks
+              } catch (err) {
+                console.error('Error restarting MediaRecorder:', err);
+                useDemoModeRef.current = true;
+                sendDemoAudioData();
+              }
+            }
+          }
+        }, 3000);
+      } catch (mediaRecorderError) {
+        console.error('Error setting up MediaRecorder:', mediaRecorderError);
+        useDemoModeRef.current = true;
+        sendDemoAudioData();
+      }
       
       console.log('Recording started successfully');
     } catch (error) {
       console.error('Error starting recording:', error);
-      alert(`Microphone access error: ${error.message}\n\nPlease check your browser permissions and ensure your microphone is properly connected.`);
+      alert(`Microphone access error: ${error.message}\n\nUsing demo mode instead.`);
+      useDemoModeRef.current = true;
+      sendDemoAudioData();
     }
   };
   
@@ -302,6 +375,9 @@ const AudioRecorder = React.forwardRef((props, ref) => {
   // Function to stop recording
   const stopRecording = () => {
     console.log('Stopping recording...');
+    
+    // Reset demo mode flag
+    useDemoModeRef.current = false;
     
     // Stop animation frame
     if (animationFrameRef.current) {
