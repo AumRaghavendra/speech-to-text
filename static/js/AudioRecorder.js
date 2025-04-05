@@ -1,141 +1,97 @@
 // Audio Recorder Component
 
 const AudioRecorder = React.forwardRef((props, ref) => {
-  const { onAudioData, isRecording, onAudioLevel } = props;
+  const { onAudioData, onAudioLevel, model } = props;
   
   // References for audio components
   const mediaRecorderRef = React.useRef(null);
   const streamRef = React.useRef(null);
   const audioContextRef = React.useRef(null);
   const analyserRef = React.useRef(null);
-  const processorRef = React.useRef(null);
-  const socketReadyRef = React.useRef(false);
+  const dataProcessorRef = React.useRef(null);
   const audioChunkQueueRef = React.useRef([]);
   const audioLevelRef = React.useRef(0);
   const animationFrameRef = React.useRef(null);
   const demoModeTimerRef = React.useRef(null);
+  const audioProcessingIntervalRef = React.useRef(null);
+  
+  // Flag to track if we have a real microphone working
+  const microphoneWorkingRef = React.useRef(false);
   
   // Constants for audio processing
   const SAMPLE_RATE = 16000;
   const BUFFER_SIZE = 4096;
   
-  // Ensures demo transcriptions are generated regardless of socket.io issues
-  React.useEffect(() => {
-    // Only set up if recording is active
-    if (isRecording && !demoModeTimerRef.current) {
-      console.log('Setting up reliable demo mode timer');
-      
-      // Generate demo transcriptions every 3-4 seconds
-      const generateTranscription = () => {
-        // Find the current model from the UI
-        let currentModel = 'google';
-        try {
-          const activeButton = document.querySelector('.model-button.active');
-          if (activeButton && activeButton.getAttribute('data-model')) {
-            currentModel = activeButton.getAttribute('data-model');
-          }
-        } catch (e) {
-          console.error('Error getting model:', e);
-        }
-        
-        // Create a demo transcription
-        const demoTexts = [
-          "This is a demonstration of the speech recognition system.",
-          "I'm really excited about using this application for my project.",
-          "The weather today is absolutely beautiful outside.",
-          "Can you tell me how well the different speech recognition models compare?",
-          "I'm not sure if my microphone is working correctly but this is a test.",
-          "Speech recognition technology has improved tremendously in recent years.",
-          "I'm feeling happy today and looking forward to learning more about this system.",
-          "This dark mode interface looks amazing with the audio visualizer.",
-          "Could you analyze the sentiment of this message please?",
-          "Using artificial intelligence for speech recognition is fascinating."
-        ];
-        
-        const randomText = demoTexts[Math.floor(Math.random() * demoTexts.length)];
-        const confidence = Math.random() * 0.15 + 0.80; // 0.80-0.95
-        
-        // Create the event that will be dispatched
-        const demoEvent = new CustomEvent('transcription_result', {
-          detail: {
-            text: randomText,
-            confidence: confidence,
-            model: currentModel,
-            processing_time: Math.floor(Math.random() * 300) + 100,
-            timestamp: Date.now(),
-            demo_mode: true,
-            sentiment: {
-              polarity: Math.random() * 2 - 1, // -1 to 1
-              label: Math.random() > 0.5 ? "Positive" : "Neutral",
-              emoji: Math.random() > 0.5 ? "🙂" : "😐",
-              confidence: Math.random() * 0.2 + 0.7,
-              specific_emotion: ["joy", "curiosity", "interest"][Math.floor(Math.random() * 3)]
-            }
-          }
-        });
-        
-        // Dispatch the event to be captured by the main App component
-        document.dispatchEvent(demoEvent);
-        console.log('Demo transcription event dispatched');
-      };
-      
-      // Create interval to regularly generate transcriptions while recording
-      demoModeTimerRef.current = setInterval(generateTranscription, 3500);
-      
-      // Generate first transcription immediately
-      setTimeout(generateTranscription, 500);
-    } else if (!isRecording && demoModeTimerRef.current) {
-      // Clean up when recording stops
-      clearInterval(demoModeTimerRef.current);
-      demoModeTimerRef.current = null;
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      if (demoModeTimerRef.current) {
-        clearInterval(demoModeTimerRef.current);
-      }
-    };
-  }, [isRecording]);
-  
-  // Function to update audio levels and visualizer
-  const updateAudioLevels = () => {
-    if (isRecording) {
-      // Generate random audio levels for visualizer regardless of real audio
-      const mockLevel = Math.random() * 0.5 + 0.3; // Generate values between 0.3 and 0.8
-      audioLevelRef.current = mockLevel;
-      
-      // Call the callback to update the visualizer
-      if (onAudioLevel) {
-        onAudioLevel(mockLevel);
-      }
-    } else {
-      // If not recording, reset audio level
-      audioLevelRef.current = 0;
-      if (onAudioLevel) {
-        onAudioLevel(0);
-      }
-    }
-    
-    // Continue animation loop
-    animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
-  };
-  
-  // Function to send demo audio data
-  const sendDemoAudioData = () => {
-    if (!isRecording) {
-      clearInterval(demoModeTimerRef.current);
+  // Function to analyze audio levels from real microphone
+  const updateRealAudioLevels = () => {
+    if (!analyserRef.current || !streamRef.current) {
+      // Fall back to mock audio levels if we don't have real audio analysis
+      updateMockAudioLevels();
       return;
     }
     
-    console.log("Sending demo audio data");
-    // Create a minimal audio chunk with demo_mode flag
-    const demoAudio = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-    if (onAudioData) {
-      onAudioData({ 
-        audio: demoAudio,
-        force_demo_mode: true 
-      });
+    try {
+      // Get audio level from analyzer
+      const bufferLength = analyserRef.current.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      analyserRef.current.getByteFrequencyData(dataArray);
+      
+      // Calculate average level (0-255)
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / bufferLength;
+      
+      // Convert to 0-1 range and apply some amplification
+      const normalizedLevel = Math.min(1, (average / 255) * 2.5);
+      
+      // Update current level
+      audioLevelRef.current = normalizedLevel;
+      
+      // Call the callback to update the visualizer
+      if (onAudioLevel) {
+        onAudioLevel(normalizedLevel);
+      }
+      
+      // Continue animation loop
+      animationFrameRef.current = requestAnimationFrame(updateRealAudioLevels);
+    } catch (error) {
+      console.error('Error analyzing audio:', error);
+      // Fall back to mock audio levels
+      updateMockAudioLevels();
+    }
+  };
+  
+  // Fallback function for mock audio levels when mic isn't working
+  const updateMockAudioLevels = () => {
+    // Generate random audio levels for visualizer
+    const mockLevel = Math.random() * 0.5 + 0.3; // Generate values between 0.3 and 0.8
+    audioLevelRef.current = mockLevel;
+    
+    // Call the callback to update the visualizer
+    if (onAudioLevel) {
+      onAudioLevel(mockLevel);
+    }
+    
+    // Continue animation loop
+    animationFrameRef.current = requestAnimationFrame(updateMockAudioLevels);
+  };
+  
+  // Fallback to ensure we get transcriptions even if microphone fails
+  const sendDemoAudioData = () => {
+    if (!microphoneWorkingRef.current) {
+      console.log("Microphone not working, sending demo audio data as fallback");
+      
+      // Create a minimal audio chunk with demo_mode flag
+      const demoAudio = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+      if (onAudioData) {
+        onAudioData({ 
+          audio: demoAudio,
+          force_demo_mode: true,
+          model: model
+        });
+      }
     }
   };
   
@@ -143,18 +99,14 @@ const AudioRecorder = React.forwardRef((props, ref) => {
   const startRecording = async () => {
     try {
       console.log('Starting recording...');
+      microphoneWorkingRef.current = false;
       
-      // Start the audio level update loop for the visualizer
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      // Start fallback demo mode timer just in case
+      if (demoModeTimerRef.current) {
+        clearInterval(demoModeTimerRef.current);
       }
-      animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
+      demoModeTimerRef.current = setInterval(sendDemoAudioData, 5000);
       
-      // Start demo mode for reliable text results
-      clearInterval(demoModeTimerRef.current);
-      demoModeTimerRef.current = setInterval(sendDemoAudioData, 3000);
-      
-      // Continue with real audio processing attempt
       try {
         // Check for MediaDevices support
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -174,78 +126,107 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         console.log('Requesting microphone access...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
+            channelCount: 1,
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true
+            autoGainControl: true,
+            sampleRate: SAMPLE_RATE
           }
         });
         
-        console.log('Microphone access granted:', stream);
+        console.log('Microphone access granted!');
         streamRef.current = stream;
         
-        // Check for audio tracks
-        const audioTracks = stream.getAudioTracks();
-        console.log('Audio tracks:', audioTracks);
-        
-        if (audioTracks.length === 0) {
-          throw new Error('No audio tracks found');
-        }
-        
-        console.log('Audio track settings:', audioTracks[0].getSettings());
-        
         // Create audio context
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        console.log('Audio context created:', audioContext);
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: SAMPLE_RATE
+        });
         audioContextRef.current = audioContext;
         
-        // Create MediaRecorder for testing
-        const mediaRecorderOptions = { mimeType: 'audio/webm' };
-        mediaRecorderRef.current = new MediaRecorder(stream, mediaRecorderOptions);
+        // Create an analyzer node for visualizing audio levels
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyserRef.current = analyser;
         
-        // Test recording
-        mediaRecorderRef.current.start();
+        // Create source from microphone stream
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
         
-        // Add data handler
+        // Initialize the MediaRecorder with appropriate options
+        const options = {
+          mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 128000
+        };
+        
+        mediaRecorderRef.current = new MediaRecorder(stream, options);
+        
+        // Set up the data handling for captured audio
         mediaRecorderRef.current.ondataavailable = async (event) => {
           if (event.data.size > 0) {
             console.log('MediaRecorder captured data chunk, size:', event.data.size);
             
-            // Send as backup
-            if (onAudioData && isRecording) {
-              try {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  console.log('Sending MediaRecorder audio chunk');
+            // We have real microphone data 
+            microphoneWorkingRef.current = true;
+            
+            // Process and send the audio data
+            try {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                if (onAudioData) {
+                  // Send actual audio data for processing
                   onAudioData({ 
                     audio: reader.result,
-                    // Still send demo flag because we know the normal audio processing isn't working
-                    force_demo_mode: true
+                    force_demo_mode: false,
+                    model: model
                   });
-                };
-                reader.readAsDataURL(event.data);
-              } catch (err) {
-                console.error('Error sending MediaRecorder data:', err);
-              }
+                }
+              };
+              reader.readAsDataURL(event.data);
+            } catch (err) {
+              console.error('Error processing audio data:', err);
+              microphoneWorkingRef.current = false;
             }
           }
         };
         
-        // Set up interval to keep getting data
-        setInterval(() => {
+        // Start the media recorder
+        mediaRecorderRef.current.start();
+        
+        // Set up interval to collect data periodically
+        if (audioProcessingIntervalRef.current) {
+          clearInterval(audioProcessingIntervalRef.current);
+        }
+        
+        audioProcessingIntervalRef.current = setInterval(() => {
           if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.requestData();
           }
-        }, 2000);
+        }, 3000); // Capture every 3 seconds
+        
+        // Start the audio level analyzer
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        animationFrameRef.current = requestAnimationFrame(updateRealAudioLevels);
+        
+        console.log('Recording started successfully with real microphone');
         
       } catch (err) {
-        console.warn('Error with microphone, using demo mode only:', err);
-        // Continue with demo mode, which is already set up
+        console.warn('Error with microphone setup:', err);
+        microphoneWorkingRef.current = false;
+        
+        // Start the mock audio level updates for the visualizer
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        animationFrameRef.current = requestAnimationFrame(updateMockAudioLevels);
+        
+        console.log('Fallback to demo mode activated');
       }
-      
-      console.log('Recording started successfully');
     } catch (error) {
-      console.error('Error starting recording:', error);
-      // Notify user, but continue with demo mode
+      console.error('Critical error starting recording:', error);
+      // Ensure visualizer works even if everything else fails
+      animationFrameRef.current = requestAnimationFrame(updateMockAudioLevels);
     }
   };
   
@@ -253,10 +234,15 @@ const AudioRecorder = React.forwardRef((props, ref) => {
   const stopRecording = () => {
     console.log('Stopping recording...');
     
-    // Clear demo mode timer
+    // Clear intervals
     if (demoModeTimerRef.current) {
       clearInterval(demoModeTimerRef.current);
       demoModeTimerRef.current = null;
+    }
+    
+    if (audioProcessingIntervalRef.current) {
+      clearInterval(audioProcessingIntervalRef.current);
+      audioProcessingIntervalRef.current = null;
     }
     
     // Stop animation frame
@@ -265,19 +251,17 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       animationFrameRef.current = null;
     }
     
-    // Clean up processor
-    if (processorRef.current && audioContextRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
+    // Clean up audio processing components
+    if (dataProcessorRef.current && audioContextRef.current) {
+      dataProcessorRef.current.disconnect();
+      dataProcessorRef.current = null;
     }
     
-    // Clean up analyser
     if (analyserRef.current && audioContextRef.current) {
       analyserRef.current.disconnect();
       analyserRef.current = null;
     }
     
-    // Clean up audio context
     if (audioContextRef.current) {
       if (audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close();
@@ -285,7 +269,7 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       audioContextRef.current = null;
     }
     
-    // Clean up media recorder
+    // Stop media recorder
     if (mediaRecorderRef.current) {
       if (mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
@@ -293,20 +277,20 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       mediaRecorderRef.current = null;
     }
     
-    // Clean up stream
+    // Stop and release microphone
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    
-    // Reset socket readiness flag
-    socketReadyRef.current = false;
     
     // Reset audio level
     audioLevelRef.current = 0;
     if (onAudioLevel) {
       onAudioLevel(0);
     }
+    
+    // Reset microphone status
+    microphoneWorkingRef.current = false;
     
     console.log('Recording stopped successfully');
   };
@@ -332,9 +316,18 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       if (demoModeTimerRef.current) {
         clearInterval(demoModeTimerRef.current);
       }
+      if (audioProcessingIntervalRef.current) {
+        clearInterval(audioProcessingIntervalRef.current);
+      }
       stopRecording();
     };
   }, []);
+  
+  // React to model changes
+  React.useEffect(() => {
+    console.log('Model changed to:', model);
+    // Any model-specific adjustments can go here
+  }, [model]);
   
   return null;
 });

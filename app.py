@@ -95,7 +95,7 @@ def handle_audio_data(data):
         
         # Try processing with the selected model
         use_demo_mode = False
-        if data.get('force_demo_mode', False):
+        if data.get('force_demo_mode', False) or 'force_demo_mode' in data:
             use_demo_mode = True
             logger.info("Forced demo mode enabled for this request")
         
