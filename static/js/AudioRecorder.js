@@ -1,7 +1,7 @@
 // Audio Recorder Component
 
 const AudioRecorder = React.forwardRef((props, ref) => {
-  const { onAudioData, onAudioLevel, model } = props;
+  const { onAudioData, onAudioLevel, model, demoMode } = props;
   
   // State and refs
   const mediaRecorderRef = React.useRef(null);
@@ -71,7 +71,7 @@ const AudioRecorder = React.forwardRef((props, ref) => {
     const randomText = demoTexts[Math.floor(Math.random() * demoTexts.length)];
     
     // Dispatch an event with the demo transcription
-    const event = new CustomEvent('demo_transcription', {
+    const event = new CustomEvent('demoTranscription', {
       detail: {
         text: randomText,
         confidence: Math.random() * 0.2 + 0.75,
@@ -112,7 +112,7 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         if (onAudioData) {
           onAudioData({
             audio: base64Audio,
-            force_demo_mode: false, // Important: This should be false to use real audio
+            force_demo_mode: demoMode, // Use the demoMode prop to determine if we should use demo mode
             model: model || 'google'
           });
         }
@@ -200,6 +200,18 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       }, 3000);
       
       console.log('Real microphone recording started');
+      
+      // If demoMode is enabled, also start demo transcriptions
+      if (demoMode) {
+        if (demoModeIntervalRef.current) {
+          clearInterval(demoModeIntervalRef.current);
+        }
+        
+        demoModeIntervalRef.current = setInterval(generateDemoTranscription, 4000);
+        
+        // Generate first demo transcription immediately
+        setTimeout(generateDemoTranscription, 500);
+      }
       
     } catch (err) {
       console.error('Error setting up microphone:', err);
@@ -292,10 +304,10 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       }
     };
     
-    document.addEventListener('demo_transcription', handleDemoTranscription);
+    document.addEventListener('demoTranscription', handleDemoTranscription);
     
     return () => {
-      document.removeEventListener('demo_transcription', handleDemoTranscription);
+      document.removeEventListener('demoTranscription', handleDemoTranscription);
     };
   }, [onAudioData, model]);
   

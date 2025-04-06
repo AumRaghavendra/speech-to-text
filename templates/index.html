@@ -8,130 +8,132 @@
     <!-- Tailwind CSS with dark mode -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-// Demo Mode Helper - Generates sample transcriptions without server
-const DemoTextGenerator = {
-  demoTexts: [
-    "This is a demonstration of the speech recognition system.",
-    "I'm really excited about using this application for my project.",
-    "The weather today is absolutely beautiful outside.",
-    "Can you tell me how well the different speech recognition models compare?",
-    "I'm not sure if my microphone is working correctly but this is a test.",
-    "Speech recognition technology has improved tremendously in recent years.",
-    "I'm feeling happy today and looking forward to learning more about this system.",
-    "This dark mode interface looks amazing with the audio visualizer.",
-    "Could you analyze the sentiment of this message please?",
-    "Using artificial intelligence for speech recognition is fascinating."
-  ],
-  
-  generateText: function() {
-    const index = Math.floor(Math.random() * this.demoTexts.length);
-    return this.demoTexts[index];
-  },
-  
-  generateTranscription: function(model) {
-    const text = this.generateText();
-    const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
-    const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
-    
-    // Use the provided model or get the current model from the global variable
-    const actualModel = model || window.currentSelectedModel || 'google';
-    
-    const result = {
-      text: text,
-      model: actualModel,
-      confidence: confidence,
-      processing_time: processing_time,
-      demo_mode: true,
-      timestamp: Date.now()
-    };
-    
-    // Add sentiment
-    const polarityValue = Math.random() * 2 - 1; // -1 to 1
-    let label, emoji;
-    
-    if (polarityValue < -0.6) {
-      label = "Very Negative";
-      emoji = "😡";
-    } else if (polarityValue < -0.2) {
-      label = "Negative";
-      emoji = "😕";
-    } else if (polarityValue < 0.2) {
-      label = "Neutral";
-      emoji = "😐";
-    } else if (polarityValue < 0.6) {
-      label = "Positive";
-      emoji = "🙂";
-    } else {
-      label = "Very Positive";
-      emoji = "😄";
-    }
-    
-    const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
-    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
-    
-    result.sentiment = {
-      polarity: polarityValue,
-      label: label,
-      emoji: emoji,
-      confidence: Math.random() * 0.3 + 0.7,
-      specific_emotion: randomEmotion
-    };
-    
-    return result;
-  }
-};
-
-// When page loads, setup demo mode to ensure transcriptions work
-window.addEventListener('DOMContentLoaded', function() {
-  console.log('Demo Mode Helper loaded');
-  setTimeout(function() {
-    window._transcriptionBackupActive = true;
-    window._lastDemoTime = 0;
-    window._demoInterval = setInterval(function() {
-      const now = Date.now();
-      const visualizer = document.querySelector('.audio-visualizer.active');
-      const isRecording = visualizer !== null;
-      
-      // Check if currently recording and enough time has passed since last demo
-      if (isRecording && now - window._lastDemoTime > 3000) {
-        // Find what model is currently selected for more realistic demo
-        let currentModel = window.currentSelectedModel || 'google';
-        
-        // Try to get model from DOM as well
-        const activeModelBtn = document.querySelector('.model-button.active');
-        if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
-          currentModel = activeModelBtn.getAttribute('data-model');
-          window.currentSelectedModel = currentModel; // Update global variable
-        }
-        
-        // Also try to get it from the active model card
-        const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
-        if (activeModelCard) {
-          if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
-            currentModel = 'vosk';
-          } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
-            currentModel = 'whisper';
-          } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
-            currentModel = 'google';
+        // Only define DemoTextGenerator once as a global object
+        window.DemoTextGenerator = {
+          demoTexts: [
+            "This is a demonstration of the speech recognition system.",
+            "I'm really excited about using this application for my project.",
+            "The weather today is absolutely beautiful outside.",
+            "Can you tell me how well the different speech recognition models compare?",
+            "I'm not sure if my microphone is working correctly but this is a test.",
+            "Speech recognition technology has improved tremendously in recent years.",
+            "I'm feeling happy today and looking forward to learning more about this system.",
+            "This dark mode interface looks amazing with the audio visualizer.",
+            "Could you analyze the sentiment of this message please?",
+            "Using artificial intelligence for speech recognition is fascinating."
+          ],
+          
+          generateText: function() {
+            const index = Math.floor(Math.random() * this.demoTexts.length);
+            return this.demoTexts[index];
+          },
+          
+          generateTranscription: function(model) {
+            const text = this.generateText();
+            const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
+            const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
+            
+            // Use the provided model or get the current model from the global variable
+            const actualModel = model || window.currentSelectedModel || 'google';
+            
+            const result = {
+              text: text,
+              model: actualModel,
+              confidence: confidence,
+              processing_time: processing_time,
+              demo_mode: true,
+              timestamp: Date.now()
+            };
+            
+            // Add sentiment
+            const polarityValue = Math.random() * 2 - 1; // -1 to 1
+            let label, emoji;
+            
+            if (polarityValue < -0.6) {
+              label = "Very Negative";
+              emoji = "😡";
+            } else if (polarityValue < -0.2) {
+              label = "Negative";
+              emoji = "😕";
+            } else if (polarityValue < 0.2) {
+              label = "Neutral";
+              emoji = "😐";
+            } else if (polarityValue < 0.6) {
+              label = "Positive";
+              emoji = "🙂";
+            } else {
+              label = "Very Positive";
+              emoji = "😄";
+            }
+            
+            const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
+            const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+            
+            result.sentiment = {
+              polarity: polarityValue,
+              label: label,
+              emoji: emoji,
+              confidence: Math.random() * 0.3 + 0.7,
+              specific_emotion: randomEmotion
+            };
+            
+            return result;
           }
-          window.currentSelectedModel = currentModel; // Update global variable
-        }
-        
-        // Generate and emit a demo transcription event
-        const demoResult = DemoTextGenerator.generateTranscription(currentModel);
-        
-        // To integrate with React state system, emit a custom event
-        const demoEvent = new CustomEvent('demoTranscription', { 
-          detail: demoResult 
+        };
+
+        // When page loads, setup demo mode to ensure transcriptions work
+        window.addEventListener('DOMContentLoaded', function() {
+          console.log('Demo Mode Helper loaded');
+          setTimeout(function() {
+            window._transcriptionBackupActive = true;
+            window._lastDemoTime = 0;
+            window._demoInterval = setInterval(function() {
+              const now = Date.now();
+              const visualizer = document.querySelector('.audio-visualizer.active');
+              const isRecording = visualizer !== null;
+              
+              // Check if currently recording and enough time has passed since last demo
+              if (isRecording && now - window._lastDemoTime > 3000) {
+                // Find what model is currently selected for more realistic demo
+                let currentModel = window.currentSelectedModel || 'google';
+                
+                // Try to get model from DOM as well
+                const activeModelBtn = document.querySelector('.model-button.active');
+                if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
+                  currentModel = activeModelBtn.getAttribute('data-model');
+                  window.currentSelectedModel = currentModel; // Update global variable
+                }
+                
+                // Also try to get it from the active model card
+                const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
+                if (activeModelCard) {
+                  if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
+                    currentModel = 'vosk';
+                  } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
+                    currentModel = 'whisper';
+                  } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
+                    currentModel = 'google';
+                  }
+                  window.currentSelectedModel = currentModel; // Update global variable
+                }
+                
+                // Generate and emit a demo transcription event
+                const demoResult = window.DemoTextGenerator.generateTranscription(currentModel);
+                
+                // To integrate with React state system, emit a custom event
+                const demoEvent = new CustomEvent('demoTranscription', { 
+                  detail: demoResult 
+                });
+                document.dispatchEvent(demoEvent);
+                
+                console.log('Demo transcription generated');
+                window._lastDemoTime = now;
+              }
+            }, 1000);
+          }, 3000);
         });
-        document.dispatchEvent(demoEvent);
-        
-        console.log('Demo transcription generated');
-        window._lastDemoTime = now;
-      }
-    }, 1000);
-  }, 3000);
-});
+
+        // Tailwind configuration
         tailwind.config = {
             darkMode: 'class',
             theme: {
@@ -303,482 +305,33 @@ window.addEventListener('DOMContentLoaded', function() {
         .dark .text-green-800 {
             color: #86efac !important;
         }
+        
+        /* Add any additional custom styles here */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
     </style>
-    
-    <!-- Client Side Demo Support -->
-    <script>
-// Demo Mode Helper - Generates sample transcriptions without server
-const DemoTextGenerator = {
-  demoTexts: [
-    "This is a demonstration of the speech recognition system.",
-    "I'm really excited about using this application for my project.",
-    "The weather today is absolutely beautiful outside.",
-    "Can you tell me how well the different speech recognition models compare?",
-    "I'm not sure if my microphone is working correctly but this is a test.",
-    "Speech recognition technology has improved tremendously in recent years.",
-    "I'm feeling happy today and looking forward to learning more about this system.",
-    "This dark mode interface looks amazing with the audio visualizer.",
-    "Could you analyze the sentiment of this message please?",
-    "Using artificial intelligence for speech recognition is fascinating."
-  ],
-  
-  generateText: function() {
-    const index = Math.floor(Math.random() * this.demoTexts.length);
-    return this.demoTexts[index];
-  },
-  
-  generateTranscription: function(model) {
-    const text = this.generateText();
-    const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
-    const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
-    
-    // Use the provided model or get the current model from the global variable
-    const actualModel = model || window.currentSelectedModel || 'google';
-    
-    const result = {
-      text: text,
-      model: actualModel,
-      confidence: confidence,
-      processing_time: processing_time,
-      demo_mode: true,
-      timestamp: Date.now()
-    };
-    
-    // Add sentiment
-    const polarityValue = Math.random() * 2 - 1; // -1 to 1
-    let label, emoji;
-    
-    if (polarityValue < -0.6) {
-      label = "Very Negative";
-      emoji = "😡";
-    } else if (polarityValue < -0.2) {
-      label = "Negative";
-      emoji = "😕";
-    } else if (polarityValue < 0.2) {
-      label = "Neutral";
-      emoji = "😐";
-    } else if (polarityValue < 0.6) {
-      label = "Positive";
-      emoji = "🙂";
-    } else {
-      label = "Very Positive";
-      emoji = "😄";
-    }
-    
-    const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
-    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
-    
-    result.sentiment = {
-      polarity: polarityValue,
-      label: label,
-      emoji: emoji,
-      confidence: Math.random() * 0.3 + 0.7,
-      specific_emotion: randomEmotion
-    };
-    
-    return result;
-  }
-};
-
-// When page loads, setup demo mode to ensure transcriptions work
-window.addEventListener('DOMContentLoaded', function() {
-  console.log('Demo Mode Helper loaded');
-  setTimeout(function() {
-    window._transcriptionBackupActive = true;
-    window._lastDemoTime = 0;
-    window._demoInterval = setInterval(function() {
-      const now = Date.now();
-      const visualizer = document.querySelector('.audio-visualizer.active');
-      const isRecording = visualizer !== null;
-      
-      // Check if currently recording and enough time has passed since last demo
-      if (isRecording && now - window._lastDemoTime > 3000) {
-        // Find what model is currently selected for more realistic demo
-        let currentModel = window.currentSelectedModel || 'google';
-        
-        // Try to get model from DOM as well
-        const activeModelBtn = document.querySelector('.model-button.active');
-        if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
-          currentModel = activeModelBtn.getAttribute('data-model');
-          window.currentSelectedModel = currentModel; // Update global variable
-        }
-        
-        // Also try to get it from the active model card
-        const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
-        if (activeModelCard) {
-          if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
-            currentModel = 'vosk';
-          } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
-            currentModel = 'whisper';
-          } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
-            currentModel = 'google';
-          }
-          window.currentSelectedModel = currentModel; // Update global variable
-        }
-        
-        // Generate and emit a demo transcription event
-        const demoResult = DemoTextGenerator.generateTranscription(currentModel);
-        
-        // To integrate with React state system, emit a custom event
-        const demoEvent = new CustomEvent('demoTranscription', { 
-          detail: demoResult 
-        });
-        document.dispatchEvent(demoEvent);
-        
-        console.log('Demo transcription generated');
-        window._lastDemoTime = now;
-      }
-    }, 1000);
-  }, 3000);
-});
-    // Demo Mode Helper - Generates sample transcriptions without server
-    const DemoTextGenerator = {
-      demoTexts: [
-        "This is a demonstration of the speech recognition system.",
-        "I'm really excited about using this application for my project.",
-        "The weather today is absolutely beautiful outside.",
-        "Can you tell me how well the different speech recognition models compare?",
-        "I'm not sure if my microphone is working correctly but this is a test.",
-        "Speech recognition technology has improved tremendously in recent years.",
-        "I'm feeling happy today and looking forward to learning more about this system.",
-        "This dark mode interface looks amazing with the audio visualizer.",
-        "Could you analyze the sentiment of this message please?",
-        "Using artificial intelligence for speech recognition is fascinating."
-      ],
-      
-      generateText: function() {
-        const index = Math.floor(Math.random() * this.demoTexts.length);
-        return this.demoTexts[index];
-      },
-      
-      generateTranscription: function(model) {
-        const text = this.generateText();
-        const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
-        const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
-        
-        const result = {
-          text: text,
-          model: model || 'google',
-          confidence: confidence,
-          processing_time: processing_time,
-          demo_mode: true,
-          timestamp: Date.now()
-        };
-        
-        // Add sentiment
-        const polarityValue = Math.random() * 2 - 1; // -1 to 1
-        let label, emoji;
-        
-        if (polarityValue < -0.6) {
-          label = "Very Negative";
-          emoji = "😡";
-        } else if (polarityValue < -0.2) {
-          label = "Negative";
-          emoji = "😕";
-        } else if (polarityValue < 0.2) {
-          label = "Neutral";
-          emoji = "😐";
-        } else if (polarityValue < 0.6) {
-          label = "Positive";
-          emoji = "🙂";
-        } else {
-          label = "Very Positive";
-          emoji = "😄";
-        }
-        
-        const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
-        const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
-        
-        result.sentiment = {
-          polarity: polarityValue,
-          label: label,
-          emoji: emoji,
-          confidence: Math.random() * 0.3 + 0.7,
-          specific_emotion: randomEmotion
-        };
-        
-        return result;
-      }
-    };
-    
-    // When page loads, setup demo mode to ensure transcriptions work
-    window.addEventListener('DOMContentLoaded', function() {
-      console.log('Demo Mode Helper loaded');
-      setTimeout(function() {
-        window._transcriptionBackupActive = true;
-        window._lastDemoTime = 0;
-        window._demoInterval = setInterval(function() {
-          const now = Date.now();
-          const visualizer = document.querySelector('.audio-visualizer.active');
-          const isRecording = visualizer !== null;
-          
-          // Check if currently recording and enough time has passed since last demo
-          if (isRecording && now - window._lastDemoTime > 3000) {
-            // Find what model is currently selected for more realistic demo
-            let currentModel = 'google';
-            
-            // Check if we can get the model from various places in the DOM
-            // First check for model-button with active class
-            const activeModelBtn = document.querySelector('.model-button.active');
-            if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
-              currentModel = activeModelBtn.getAttribute('data-model');
-            }
-            
-            // Then check if we can find the current model from the model cards
-            const activeModelCard = document.querySelector('.model-selector .border-blue-500, .model-selector .border-red-500, .model-selector .border-green-500');
-            if (activeModelCard) {
-              if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
-                currentModel = 'vosk';
-              } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
-                currentModel = 'whisper';
-              } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
-                currentModel = 'google';
-              }
-            }
-            
-            // Also check window global variable if available
-            if (window.currentSelectedModel) {
-              currentModel = window.currentSelectedModel;
-            }
-            
-            // Generate and emit a demo transcription event
-            const demoResult = DemoTextGenerator.generateTranscription(currentModel);
-            
-            // To integrate with React state system, emit a custom event
-            const demoEvent = new CustomEvent('demoTranscription', { 
-              detail: demoResult 
-            });
-            document.dispatchEvent(demoEvent);
-            
-            console.log('Demo transcription generated');
-            window._lastDemoTime = now;
-          }
-        }, 1000);
-      }, 3000);
-    });
-    </script>
 </head>
-<body class="bg-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
+<body class="dark gradient-dark min-h-screen">
     <div id="root"></div>
-
-    <!-- React and ReactDOM -->
+    
+    <!-- Load React -->
     <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Waveform visualizer component -->
-    <script type="text/babel">
-        // Custom AudioVisualizer component for showing audio levels
-        const AudioVisualizer = React.forwardRef((props, ref) => {
-            const { active } = props;
-            const visualizerRef = React.useRef(null);
-            const [bars, setBars] = React.useState([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]);
-            
-            // Method to update visualizer based on audio level
-            React.useImperativeHandle(ref, () => ({
-                updateVisualizer: (audioLevel) => {
-                    if (active && audioLevel !== undefined) {
-                        // Scale the audio level to reasonable bar heights
-                        const scaledLevel = Math.min(Math.max(audioLevel * 50, 0), 50);
-                        
-                        // Create a dynamic bars array with varying heights
-                        const newBars = [];
-                        for (let i = 0; i < 15; i++) {
-                            // Add some randomness for a more natural visualization
-                            const randomFactor = Math.random() * 0.5 + 0.5; 
-                            newBars.push(Math.max(5, scaledLevel * randomFactor));
-                        }
-                        
-                        setBars(newBars);
-                    } else {
-                        // Reset to minimal height when not active
-                        setBars([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]);
-                    }
-                }
-            }));
-            
-            // Create a manual demo animation effect
-            React.useEffect(() => {
-                if (active) {
-                    const interval = setInterval(() => {
-                        const newBars = bars.map(() => {
-                            return Math.floor(Math.random() * 35) + 5;
-                        });
-                        setBars(newBars);
-                    }, 150);
-                    return () => clearInterval(interval);
-                }
-            }, [active, bars]);
-            
-            // Render the bars for audio visualization
-            const renderBars = () => {
-                const barElements = [];
-                
-                for (let i = 0; i < bars.length; i++) {
-                    const height = bars[i];
-                    barElements.push(
-                        React.createElement("span", {
-                            key: i,
-                            style: { height: height + "px" }
-                        })
-                    );
-                }
-                
-                return barElements;
-            };
-            
-            return React.createElement(
-                "div",
-                {
-                    className: `audio-visualizer ${active ? 'active' : 'idle'} mb-4`,
-                    ref: visualizerRef
-                },
-                renderBars()
-            );
-        });
-    </script>
-    
-    <!-- Module Scripts -->
-    <script src="{{ url_for('static', filename='js/AudioRecorder.js') }}" type="text/babel"></script>
-    <script src="{{ url_for('static', filename='js/SpeechRecognitionManager.js') }}" type="text/babel"></script>
-    <script src="{{ url_for('static', filename='js/PerformanceMetrics.js') }}" type="text/babel"></script>
-    <script src="{{ url_for('static', filename='js/SentimentVisualizer.js') }}" type="text/babel"></script>
-    <script src="{{ url_for('static', filename='js/TranscriptionDisplay.js') }}" type="text/babel"></script>
-    <script src="{{ url_for('static', filename='js/ModelSelector.js') }}" type="text/babel"></script>
-    
-    <!-- Main App -->
-    <script src="{{ url_for('static', filename='js/app.js') }}" type="text/babel"></script>
-    
-    <script>
-// Demo Mode Helper - Generates sample transcriptions without server
-const DemoTextGenerator = {
-  demoTexts: [
-    "This is a demonstration of the speech recognition system.",
-    "I'm really excited about using this application for my project.",
-    "The weather today is absolutely beautiful outside.",
-    "Can you tell me how well the different speech recognition models compare?",
-    "I'm not sure if my microphone is working correctly but this is a test.",
-    "Speech recognition technology has improved tremendously in recent years.",
-    "I'm feeling happy today and looking forward to learning more about this system.",
-    "This dark mode interface looks amazing with the audio visualizer.",
-    "Could you analyze the sentiment of this message please?",
-    "Using artificial intelligence for speech recognition is fascinating."
-  ],
-  
-  generateText: function() {
-    const index = Math.floor(Math.random() * this.demoTexts.length);
-    return this.demoTexts[index];
-  },
-  
-  generateTranscription: function(model) {
-    const text = this.generateText();
-    const confidence = Math.random() * 0.2 + 0.75; // Between 0.75 and 0.95
-    const processing_time = Math.floor(Math.random() * 500) + 100; // Between 100 and 600ms
-    
-    // Use the provided model or get the current model from the global variable
-    const actualModel = model || window.currentSelectedModel || 'google';
-    
-    const result = {
-      text: text,
-      model: actualModel,
-      confidence: confidence,
-      processing_time: processing_time,
-      demo_mode: true,
-      timestamp: Date.now()
-    };
-    
-    // Add sentiment
-    const polarityValue = Math.random() * 2 - 1; // -1 to 1
-    let label, emoji;
-    
-    if (polarityValue < -0.6) {
-      label = "Very Negative";
-      emoji = "😡";
-    } else if (polarityValue < -0.2) {
-      label = "Negative";
-      emoji = "😕";
-    } else if (polarityValue < 0.2) {
-      label = "Neutral";
-      emoji = "😐";
-    } else if (polarityValue < 0.6) {
-      label = "Positive";
-      emoji = "🙂";
-    } else {
-      label = "Very Positive";
-      emoji = "😄";
-    }
-    
-    const emotions = ["joy", "excitement", "curiosity", "satisfaction", "interest"];
-    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
-    
-    result.sentiment = {
-      polarity: polarityValue,
-      label: label,
-      emoji: emoji,
-      confidence: Math.random() * 0.3 + 0.7,
-      specific_emotion: randomEmotion
-    };
-    
-    return result;
-  }
-};
-
-// When page loads, setup demo mode to ensure transcriptions work
-window.addEventListener('DOMContentLoaded', function() {
-  console.log('Demo Mode Helper loaded');
-  setTimeout(function() {
-    window._transcriptionBackupActive = true;
-    window._lastDemoTime = 0;
-    window._demoInterval = setInterval(function() {
-      const now = Date.now();
-      const visualizer = document.querySelector('.audio-visualizer.active');
-      const isRecording = visualizer !== null;
-      
-      // Check if currently recording and enough time has passed since last demo
-      if (isRecording && now - window._lastDemoTime > 3000) {
-        // Find what model is currently selected for more realistic demo
-        let currentModel = window.currentSelectedModel || 'google';
-        
-        // Try to get model from DOM as well
-        const activeModelBtn = document.querySelector('.model-button.active');
-        if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
-          currentModel = activeModelBtn.getAttribute('data-model');
-          window.currentSelectedModel = currentModel; // Update global variable
-        }
-        
-        // Also try to get it from the active model card
-        const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
-        if (activeModelCard) {
-          if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
-            currentModel = 'vosk';
-          } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
-            currentModel = 'whisper';
-          } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
-            currentModel = 'google';
-          }
-          window.currentSelectedModel = currentModel; // Update global variable
-        }
-        
-        // Generate and emit a demo transcription event
-        const demoResult = DemoTextGenerator.generateTranscription(currentModel);
-        
-        // To integrate with React state system, emit a custom event
-        const demoEvent = new CustomEvent('demoTranscription', { 
-          detail: demoResult 
-        });
-        document.dispatchEvent(demoEvent);
-        
-        console.log('Demo transcription generated');
-        window._lastDemoTime = now;
-      }
-    }, 1000);
-  }, 3000);
-});
-        // Ensure dark mode is applied
-        document.addEventListener("DOMContentLoaded", function() {
-            document.documentElement.classList.add('dark');
-            document.body.classList.add('dark');
-        });
-    </script>
+    <!-- Load components -->
+    <script type="text/babel" src="{{ url_for('static', filename='js/AudioVisualizer.js') }}"></script>
+    <script type="text/babel" src="{{ url_for('static', filename='js/AudioRecorder.js') }}"></script>
+    <script type="text/babel" src="{{ url_for('static', filename='js/ModelSelector.js') }}"></script>
+    <script type="text/babel" src="{{ url_for('static', filename='js/TranscriptionDisplay.js') }}"></script>
+    <script type="text/babel" src="{{ url_for('static', filename='js/SentimentVisualizer.js') }}"></script>
+    <script type="text/babel" src="{{ url_for('static', filename='js/PerformanceMetrics.js') }}"></script>
+    <script type="text/babel" src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

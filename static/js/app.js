@@ -16,6 +16,7 @@ const App = () => {
   const [currentAudioLevel, setCurrentAudioLevel] = React.useState(0);
   const [darkMode, setDarkMode] = React.useState(true);
   const [demoModeInterval, setDemoModeInterval] = React.useState(null);
+  const [demoMode, setDemoMode] = React.useState(true);
   
   // Refs
   const audioRecorderRef = React.useRef(null);
@@ -32,10 +33,23 @@ const App = () => {
       document.body.classList.remove('dark');
     }
   };
+
+  // Toggle demo mode
+  const toggleDemoMode = () => {
+    const newDemoMode = !demoMode;
+    setDemoMode(newDemoMode);
+    console.log("Demo mode " + (newDemoMode ? "enabled" : "disabled"));
+    
+    // If currently recording, restart to apply the change
+    if (isRecording) {
+      toggleRecording(); // Stop recording
+      setTimeout(() => toggleRecording(), 500); // Start recording again
+    }
+  };
   
   // Demo mode transcription generator
   const generateDemoTranscription = () => {
-    if (!isRecording) return;
+    if (!isRecording || !demoMode) return;
     
     // Generate a random transcription
     const demoTexts = [
@@ -333,14 +347,16 @@ const App = () => {
         audioRecorderRef.current.startRecording();
       }
       
-      // Start demo mode interval
-      const interval = setInterval(generateDemoTranscription, 4000);
-      setDemoModeInterval(interval);
+      // Start demo mode interval only if demo mode is enabled
+      if (demoMode) {
+        const interval = setInterval(generateDemoTranscription, 4000);
+        setDemoModeInterval(interval);
+        
+        // Generate first transcription immediately
+        setTimeout(generateDemoTranscription, 500);
+      }
       
       setIsRecording(true);
-      
-      // Generate first transcription immediately
-      setTimeout(generateDemoTranscription, 500);
     }
   };
   
@@ -479,6 +495,7 @@ const App = () => {
               onAudioLevel={handleAudioLevel}
               model={currentModel}
               noiseReduction={noiseReduction}
+              demoMode={demoMode}
             />
             
             <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-4">
@@ -496,6 +513,7 @@ const App = () => {
                     Noise Reduction
                   </label>
                 </div>
+                
                 <div className="flex items-center">
                   <input
                     type="checkbox"
@@ -508,7 +526,28 @@ const App = () => {
                     Sentiment Analysis
                   </label>
                 </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="demoMode"
+                    className="form-checkbox h-5 w-5 text-indigo-600"
+                    checked={demoMode}
+                    onChange={toggleDemoMode}
+                  />
+                  <label htmlFor="demoMode" className="ml-2 text-gray-700 dark:text-gray-300">
+                    Demo Mode <span className="text-xs italic">(Disable to use your real voice)</span>
+                  </label>
+                </div>
               </div>
+            </div>
+            
+            <div className="mb-4">
+              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">Speech Recognition Model</h3>
+              <ModelSelector 
+                currentModel={currentModel}
+                onModelChange={handleModelChange}
+              />
             </div>
             
             <TranscriptionDisplay 
@@ -520,45 +559,35 @@ const App = () => {
         
         <div className="col-span-1">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300">
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Model Selection</h2>
-            <ModelSelector 
-              currentModel={currentModel}
-              onModelChange={handleModelChange}
-              bestModel={performanceMetrics.best_model}
-            />
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Performance Metrics</h2>
+              <button
+                onClick={handleResetMetrics}
+                className="px-3 py-1 rounded text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500"
+              >
+                Reset
+              </button>
+            </div>
+            
+            <PerformanceMetrics metrics={performanceMetrics} />
           </div>
           
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 transition-colors duration-300">
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Performance Metrics</h2>
-            <PerformanceMetrics 
-              metrics={performanceMetrics}
-              onResetMetrics={handleResetMetrics}
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Sentiment Analysis</h2>
+            <SentimentVisualizer 
+              results={transcriptionResults} 
+              enabled={sentimentAnalysis}
             />
           </div>
         </div>
       </div>
       
-      <footer className="mt-12 text-center text-gray-600 dark:text-gray-400 text-sm">
-        <p>Speech Recognition Comparison Tool. Comparing Vosk, Whisper, and Google Speech Recognition.</p>
+      <footer className="mt-10 text-center text-gray-500 dark:text-gray-400 text-sm">
+        <p>© 2025 Speech-to-Text Comparison Tool</p>
       </footer>
     </div>
   );
 };
 
-// Mount the app
+// Render the app
 ReactDOM.render(<App />, document.getElementById('root'));
-// Fix for demoTranscription event handling
-document.addEventListener('demoTranscription', function(event) {
-  if (event.detail) {
-    console.log('Received demo transcription from event:', event.detail);
-    // Dispatch it as a custom event to be handled by the app
-    const customEvent = new CustomEvent('demo_transcription', {
-      detail: event.detail
-    });
-    document.dispatchEvent(customEvent);
-  }
-});
-// Add direct event listener for demo transcriptions
-document.addEventListener('demo_transcription', function(event) {
-  console.log('Demo transcription event received in app.js:', event.detail);
-});
