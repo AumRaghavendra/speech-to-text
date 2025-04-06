@@ -232,16 +232,7 @@ const AudioRecorder = React.forwardRef((props, ref) => {
     } catch (err) {
       console.error('Error setting up microphone:', err);
       
-      // Alert the user about microphone access issues
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        alert('Microphone access was denied. Please allow microphone access to use this application.');
-      } else if (err.name === 'NotFoundError') {
-        alert('No microphone found. Please connect a microphone and try again.');
-      } else {
-        alert('Error accessing microphone: ' + err.message);
-      }
-      
-      // Fall back to demo mode, but only if absolutely necessary
+      // Fall back to demo mode
       if (demoModeIntervalRef.current) {
         clearInterval(demoModeIntervalRef.current);
       }

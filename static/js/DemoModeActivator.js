@@ -1,189 +1,226 @@
 // Demo Mode Activator
-// This script ensures that even if socket.io connection fails,
-// the demo mode will still work by directly inserting transcription results
 
-(() => {
-  // Wait for the page to load
-  window.addEventListener('DOMContentLoaded', () => {
-    console.log('Demo Mode Activator loaded');
+// This component manages the demo mode activation
+// When enabled, it provides fallback data when the real API isn't working
+
+class DemoModeActivator extends React.Component {
+  constructor(props) {
+    super(props);
     
-    // Try to start the activator after App component is mounted
-    setTimeout(() => {
-      activateBackupDemoMode();
-    }, 2000);
-  });
+    this.state = {
+      isDemoModeActive: false
+    };
+  }
   
-  function activateBackupDemoMode() {
-    try {
-      console.log('Setting up backup demo mode');
-      
-      // Add a global flag to track if we need backup demo mode
-      window.needsBackupDemoMode = true;
-      
-      // Set up an interval to check if we have recent transcriptions
-      let lastTranscriptionCount = 0;
-      let currentTranscriptionCount = 0;
-      let noProgressCounter = 0;
-      
-      // Store interval reference for cleanup
-      window.backupDemoInterval = setInterval(() => {
-        // Check if recording is active by looking for active visualizer
-        const visualizer = document.querySelector('.audio-visualizer');
-        const isVisualizerActive = visualizer && visualizer.classList.contains('active');
-        
-        // Count transcription results
-        const transcriptionItems = document.querySelectorAll('.transcription-item');
-        currentTranscriptionCount = transcriptionItems.length;
-        
-        // Check if we need to generate a backup transcription
-        if (isVisualizerActive) {
-          // If recording but no new transcriptions, increment counter
-          if (currentTranscriptionCount === lastTranscriptionCount) {
-            noProgressCounter++;
-            
-            // After 3 seconds without new transcriptions, start generating them
-            if (noProgressCounter >= 3) {
-              console.log('Backup demo mode activated - generating transcription');
-              generateBackupTranscription();
-              noProgressCounter = 0; // Reset counter after generating
-            }
-          } else {
-            // Reset counter if we got new transcriptions
-            noProgressCounter = 0;
-            lastTranscriptionCount = currentTranscriptionCount;
-          }
-        } else {
-          // Not recording, reset counters
-          noProgressCounter = 0;
-        }
-      }, 1000);
-    } catch (err) {
-      console.error('Error setting up backup demo mode:', err);
+  componentDidMount() {
+    console.log("Demo Mode Activator initialized - real microphone recording enabled");
+    
+    // IMPORTANT: Set demo mode to disabled by default
+    window._transcriptionBackupActive = false;
+    
+    // Handle demoTranscription events from the global scope
+    document.addEventListener('demoTranscription', this.handleDemoTranscription);
+    
+    // Check if the client is manually in demo mode (for testing)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('demo') && urlParams.get('demo') === 'true') {
+      this.activateBackupDemoMode();
     }
   }
   
-  function generateBackupTranscription() {
-    try {
-      // Find the current model
-      let currentModel = 'google'; // Default
-      const modelButtons = document.querySelectorAll('.model-button');
-      modelButtons.forEach(button => {
-        if (button.classList.contains('active')) {
-          currentModel = button.getAttribute('data-model') || currentModel;
-        }
-      });
-      
-      // Check if sentiment analysis is enabled
-      const sentimentToggle = document.querySelector('input[type="checkbox"][checked]');
-      const sentimentEnabled = sentimentToggle !== null;
-      
-      // Generate client-side demo transcription
-      const result = ClientSideDemo.generateTranscription(currentModel, sentimentEnabled);
-      
-      // Create and insert a new transcription item into the DOM
-      insertTranscriptionIntoDOM(result);
-      
-      // Also update metrics display
-      updateMetricsDisplay(result);
-    } catch (err) {
-      console.error('Error generating backup transcription:', err);
+  componentWillUnmount() {
+    document.removeEventListener('demoTranscription', this.handleDemoTranscription);
+    
+    // Clear any demo interval
+    if (window._demoInterval) {
+      clearInterval(window._demoInterval);
     }
   }
   
-  function insertTranscriptionIntoDOM(result) {
+  // Handle demo transcription events
+  handleDemoTranscription = (event) => {
+    // Check if we should actually use this event
+    if (!window._transcriptionBackupActive) {
+      console.log("Demo transcription received but demo mode is inactive");
+      return;
+    }
+    
+    if (event.detail) {
+      this.insertTranscriptionIntoDOM(event.detail);
+      this.updateMetricsDisplay(event.detail);
+    }
+  }
+  
+  // Function to manually activate backup demo mode
+  activateBackupDemoMode = () => {
+    console.log("Manually activating demo mode");
+    window._transcriptionBackupActive = true;
+    this.setState({ isDemoModeActive: true });
+    
+    // For testing only - generate a demo transcription periodically
+    // In real usage, this would only be used as a fallback
+  }
+  
+  // Function to insert demo transcription into the DOM
+  insertTranscriptionIntoDOM = (result) => {
     try {
-      // Find the transcription container
-      const container = document.querySelector('.transcription-items-container');
-      if (!container) return;
+      // Insert transcription into correct container
+      const transcriptionContainer = document.querySelector('#transcription-container');
+      if (!transcriptionContainer) return;
       
-      // Create a new transcription item
-      const item = document.createElement('div');
-      item.className = 'transcription-item bg-white dark:bg-gray-700 p-4 rounded-lg shadow mb-3 fade-in transition-all';
+      // Create a new entry and add it
+      const entryDiv = document.createElement('div');
+      entryDiv.className = "mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg shadow";
       
-      // Format the confidence percentage
-      const confidencePercent = Math.round(result.confidence * 100);
+      const modelSpan = document.createElement('span');
+      modelSpan.className = "text-xs font-medium px-2 py-1 rounded mr-2";
       
-      // Create the HTML content
-      let content = `
-        <div class="flex justify-between items-start">
-          <div class="flex-1">
-            <p class="text-gray-800 dark:text-gray-200">${result.text}</p>
-            <div class="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400">
-              <span class="mr-3">Model: <span class="font-medium">${result.model}</span></span>
-              <span class="mr-3">Confidence: <span class="font-medium">${confidencePercent}%</span></span>
-              <span>Time: <span class="font-medium">${result.processing_time}ms</span></span>
-              <span class="ml-3 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">Demo</span>
-            </div>
-          </div>
-      `;
+      // Set color based on model
+      if (result.model === 'google') {
+        modelSpan.className += " bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+      } else if (result.model === 'vosk') {
+        modelSpan.className += " bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+      } else if (result.model === 'whisper') {
+        modelSpan.className += " bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      }
       
-      // Add sentiment if available
+      modelSpan.textContent = result.model.toUpperCase();
+      
+      // Add demo indicator
+      const demoSpan = document.createElement('span');
+      demoSpan.className = "text-xs font-medium px-2 py-1 rounded mr-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
+      demoSpan.textContent = "DEMO";
+      
+      // Create confidence badge
+      const confidenceSpan = document.createElement('span');
+      confidenceSpan.className = "text-xs px-2 py-1 rounded bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300";
+      confidenceSpan.textContent = `${Math.round(result.confidence * 100)}% confidence`;
+      
+      // Create header div
+      const headerDiv = document.createElement('div');
+      headerDiv.className = "flex items-center justify-between mb-2";
+      
+      const leftDiv = document.createElement('div');
+      leftDiv.appendChild(modelSpan);
+      leftDiv.appendChild(demoSpan);
+      
+      headerDiv.appendChild(leftDiv);
+      headerDiv.appendChild(confidenceSpan);
+      
+      // Create text content
+      const textDiv = document.createElement('div');
+      textDiv.className = "text-gray-800 dark:text-gray-100 text-lg";
+      textDiv.textContent = result.text;
+      
+      // Sentiment display if available
       if (result.sentiment) {
-        content += `
-          <div class="ml-4 flex-shrink-0 text-center">
-            <div class="text-4xl mb-1">${result.sentiment.emoji}</div>
-            <div class="text-xs font-medium text-gray-600 dark:text-gray-300">${result.sentiment.label}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">${result.sentiment.specific_emotion}</div>
-          </div>
-        `;
-      }
-      
-      // Close the container
-      content += `</div>`;
-      
-      // Set the HTML
-      item.innerHTML = content;
-      
-      // Insert at the beginning of the container
-      container.insertBefore(item, container.firstChild);
-      
-      // Limit to 20 items to prevent performance issues
-      const items = container.querySelectorAll('.transcription-item');
-      if (items.length > 20) {
-        for (let i = 20; i < items.length; i++) {
-          items[i].remove();
+        const sentimentDiv = document.createElement('div');
+        sentimentDiv.className = "mt-2 flex items-center";
+        
+        const emojiSpan = document.createElement('span');
+        emojiSpan.className = "text-2xl mr-2";
+        emojiSpan.textContent = result.sentiment.emoji;
+        
+        const sentimentLabel = document.createElement('span');
+        sentimentLabel.className = "text-sm text-gray-700 dark:text-gray-300";
+        sentimentLabel.textContent = `${result.sentiment.label}`;
+        
+        if (result.sentiment.specific_emotion) {
+          sentimentLabel.textContent += ` (${result.sentiment.specific_emotion})`;
         }
+        
+        sentimentDiv.appendChild(emojiSpan);
+        sentimentDiv.appendChild(sentimentLabel);
+        
+        textDiv.appendChild(sentimentDiv);
       }
-    } catch (err) {
-      console.error('Error inserting transcription into DOM:', err);
+      
+      // Processing time
+      const timeDiv = document.createElement('div');
+      timeDiv.className = "text-xs text-gray-500 dark:text-gray-400 mt-2";
+      timeDiv.textContent = `Processed in ${result.processing_time}ms`;
+      
+      // Assemble components
+      entryDiv.appendChild(headerDiv);
+      entryDiv.appendChild(textDiv);
+      entryDiv.appendChild(timeDiv);
+      
+      // Add to container at the beginning
+      transcriptionContainer.insertBefore(entryDiv, transcriptionContainer.firstChild);
+    } catch (e) {
+      console.error("Error inserting demo transcription:", e);
     }
   }
   
-  function updateMetricsDisplay(result) {
+  // Function to update metrics display with demo data
+  updateMetricsDisplay = (result) => {
     try {
       // Find the metrics container
-      const metricsContainer = document.querySelector('.performance-metrics-container');
+      const metricsContainer = document.querySelector('#metrics-container');
       if (!metricsContainer) return;
       
-      // Get the model-specific metrics section
-      const modelSection = metricsContainer.querySelector(`[data-model="${result.model}"]`);
-      if (!modelSection) return;
+      // Update metrics based on model
+      const model = result.model;
+      const confidence = result.confidence;
+      const processingTime = result.processing_time;
       
-      // Update the values - we'll make simple incremental changes
+      // Find or create model row
+      let modelRow = metricsContainer.querySelector(`[data-model="${model}"]`);
       
-      // Get the count element and increment
-      const countElement = modelSection.querySelector('.count-value');
-      if (countElement) {
-        let count = parseInt(countElement.textContent) || 0;
-        count++;
-        countElement.textContent = count;
+      if (!modelRow) {
+        modelRow = document.createElement('tr');
+        modelRow.setAttribute('data-model', model);
+        
+        // Create cells
+        const cells = [
+          document.createElement('td'), // Model name
+          document.createElement('td'), // Accuracy
+          document.createElement('td'), // Speed
+          document.createElement('td'), // Count
+        ];
+        
+        cells[0].className = "px-4 py-2 font-medium";
+        cells[0].textContent = model.toUpperCase();
+        
+        cells[1].className = "px-4 py-2 text-center";
+        cells[2].className = "px-4 py-2 text-center";
+        cells[3].className = "px-4 py-2 text-center";
+        
+        cells.forEach(cell => modelRow.appendChild(cell));
+        
+        // Add model row to table
+        const tbody = metricsContainer.querySelector('tbody');
+        if (tbody) {
+          tbody.appendChild(modelRow);
+        }
       }
       
-      // Update average time
-      const timeElement = modelSection.querySelector('.time-value');
-      if (timeElement) {
-        let time = parseInt(timeElement.textContent) || 0;
-        timeElement.textContent = Math.round((time + result.processing_time) / 2);
-      }
+      // Get current values
+      let count = parseInt(modelRow.querySelector('td:nth-child(4)').textContent || '0');
+      let avgConfidence = parseFloat(modelRow.querySelector('td:nth-child(2)').textContent || '0');
+      let avgSpeed = parseFloat(modelRow.querySelector('td:nth-child(3)').textContent || '0');
       
-      // Update confidence
-      const confidenceElement = modelSection.querySelector('.confidence-value');
-      if (confidenceElement) {
-        let confidence = parseFloat(confidenceElement.textContent) || 0;
-        confidenceElement.textContent = ((confidence + (result.confidence * 100)) / 2).toFixed(1);
-      }
-    } catch (err) {
-      console.error('Error updating metrics display:', err);
+      // Calculate new running averages
+      count += 1;
+      avgConfidence = ((avgConfidence * (count - 1)) + (confidence * 100)) / count;
+      avgSpeed = ((avgSpeed * (count - 1)) + processingTime) / count;
+      
+      // Update the display
+      modelRow.querySelector('td:nth-child(2)').textContent = avgConfidence.toFixed(1) + '%';
+      modelRow.querySelector('td:nth-child(3)').textContent = avgSpeed.toFixed(0) + 'ms';
+      modelRow.querySelector('td:nth-child(4)').textContent = count;
+    } catch (e) {
+      console.error("Error updating metrics display:", e);
     }
   }
-})();
+  
+  render() {
+    return (
+      <div className={`fixed top-0 right-0 p-2 ${this.state.isDemoModeActive ? 'block' : 'hidden'}`}>
+        <div className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs rounded p-1">
+          Demo Mode Active
+        </div>
+      </div>
+    );
+  }
+}
