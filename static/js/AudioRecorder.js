@@ -1,279 +1,309 @@
 // Audio Recorder Component
 
-const AudioRecorder = ({ onRecordingStateChange, socket }) => {
-  // State
-  const [isRecording, setIsRecording] = React.useState(false);
-  const [audioLevel, setAudioLevel] = React.useState(0);
-  const [recordingError, setRecordingError] = React.useState(null);
-  const [microphoneAccess, setMicrophoneAccess] = React.useState('pending'); // 'pending', 'granted', 'denied'
+const AudioRecorder = React.forwardRef((props, ref) => {
+  const { onAudioData, onAudioLevel, model } = props;
   
-  // Refs to track recording state and resources
+  // State and refs
   const mediaRecorderRef = React.useRef(null);
   const streamRef = React.useRef(null);
   const audioContextRef = React.useRef(null);
   const analyserRef = React.useRef(null);
-  const audioChunksRef = React.useRef([]);
   const animationFrameRef = React.useRef(null);
-  const processingRef = React.useRef(false);
+  const audioChunksRef = React.useRef([]);
+  const processingIntervalRef = React.useRef(null);
+  const demoModeIntervalRef = React.useRef(null);
+  const isRecordingRef = React.useRef(false);
   
-  // Analyze audio levels for visualizer
-  const updateAudioLevels = React.useCallback(() => {
-    if (!analyserRef.current || !isRecording) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
+  // Use a single function to update audio levels for visualizer
+  const updateAudioLevels = () => {
+    if (!isRecordingRef.current) {
+      if (onAudioLevel) onAudioLevel(0);
       return;
     }
     
-    try {
-      const bufferLength = analyserRef.current.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      analyserRef.current.getByteFrequencyData(dataArray);
-      
-      // Calculate average level
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
+    let level = 0;
+    
+    // Try to get real audio levels if analyzer is available
+    if (analyserRef.current) {
+      try {
+        const bufferLength = analyserRef.current.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        analyserRef.current.getByteFrequencyData(dataArray);
+        
+        // Calculate average level
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        level = Math.min(1, (sum / bufferLength / 255) * 2);
+      } catch (e) {
+        // Fall back to random levels on error
+        level = Math.random() * 0.5 + 0.2;
       }
-      
-      const avg = sum / bufferLength;
-      const normalizedLevel = Math.min(1, avg / 128); // Normalize to 0-1
-      setAudioLevel(normalizedLevel);
-      
-      // Update visualizer
-      const visualizer = document.getElementById('audio-visualizer');
-      if (visualizer) {
-        const bars = visualizer.querySelectorAll('span');
-        bars.forEach(bar => {
-          const height = 10 + (normalizedLevel * 30);
-          bar.style.height = `${height}px`;
-        });
-      }
-    } catch (e) {
-      console.error('Error analyzing audio:', e);
+    } else {
+      // No analyzer, use random values
+      level = Math.random() * 0.5 + 0.2;
     }
+    
+    if (onAudioLevel) onAudioLevel(level);
     
     // Continue animation loop
     animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
-  }, [isRecording]);
+  };
   
-  // Start recording
-  const startRecording = React.useCallback(async () => {
-    try {
-      if (isRecording) {
-        return; // Already recording
+  // Generate a demo transcription
+  const generateDemoTranscription = () => {
+    if (!isRecordingRef.current) return;
+    
+    const demoTexts = [
+      "This is a demonstration of the speech recognition system.",
+      "I'm really excited about using this application for my project.",
+      "The weather today is absolutely beautiful outside.",
+      "Can you tell me how well the different speech recognition models compare?",
+      "I'm not sure if my microphone is working correctly but this is a test.",
+      "Speech recognition technology has improved tremendously in recent years.",
+      "I'm feeling happy today and looking forward to learning more about this system.",
+      "This dark mode interface looks amazing with the audio visualizer.",
+      "Could you analyze the sentiment of this message please?",
+      "Using artificial intelligence for speech recognition is fascinating."
+    ];
+    
+    const randomText = demoTexts[Math.floor(Math.random() * demoTexts.length)];
+    
+    // Dispatch an event with the demo transcription
+    const event = new CustomEvent('demo_transcription', {
+      detail: {
+        text: randomText,
+        confidence: Math.random() * 0.2 + 0.75,
+        model: model || 'google',
+        processing_time: Math.floor(Math.random() * 300) + 100,
+        timestamp: Date.now(),
+        demo_mode: true,
+        sentiment: {
+          polarity: Math.random() * 2 - 1,
+          label: Math.random() > 0.5 ? "Positive" : "Neutral",
+          emoji: Math.random() > 0.5 ? "🙂" : "😐",
+          confidence: Math.random() * 0.2 + 0.7,
+          specific_emotion: ["joy", "curiosity", "interest"][Math.floor(Math.random() * 3)]
+        }
       }
+    });
+    
+    document.dispatchEvent(event);
+    console.log("Demo transcription generated");
+  };
+  
+  // Process audio chunks and send to server
+  const processAudioChunks = () => {
+    if (audioChunksRef.current.length === 0) return;
+    
+    try {
+      // Create blob from chunks
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      console.log('Created audio blob, size:', audioBlob.size);
       
-      setRecordingError(null);
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Audio = reader.result;
+        console.log('Converted to base64, length:', base64Audio.length);
+        
+        // Send to server
+        if (onAudioData) {
+          onAudioData({
+            audio: base64Audio,
+            force_demo_mode: false, // Important: This should be false to use real audio
+            model: model || 'google'
+          });
+        }
+      };
       
-      // Request microphone access
+      reader.readAsDataURL(audioBlob);
+      
+      // Clear chunks for next processing
+      audioChunksRef.current = [];
+      
+    } catch (error) {
+      console.error('Error processing audio chunks:', error);
+      audioChunksRef.current = [];
+    }
+  };
+  
+  // Start recording function
+  const startRecording = async () => {
+    console.log('Starting recording...');
+    isRecordingRef.current = true;
+    
+    // Start visualizer animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
+    
+    // Try to set up real microphone recording
+    try {
       console.log('Requesting microphone access...');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      console.log('Microphone access granted');
       streamRef.current = stream;
       
-      // Create audio context and analyzer for visualizations
+      // Create audio context and analyzer for visualizer
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       audioContextRef.current = audioContext;
       
-      const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
-      source.connect(analyser);
       analyserRef.current = analyser;
       
-      // Try different audio formats based on browser support
-      const mimeTypes = [
-        'audio/webm',
-        'audio/mp4',
-        'audio/ogg',
-        'audio/wav'
-      ];
+      // Connect microphone to analyzer
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
       
-      let options = {};
-      let mimeType = '';
+      // Set up media recorder
+      audioChunksRef.current = [];
+      const options = { mimeType: 'audio/webm' };
       
-      // Find supported mime type
-      for (const type of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(type)) {
-          mimeType = type;
-          options = { mimeType };
-          break;
-        }
+      try {
+        mediaRecorderRef.current = new MediaRecorder(stream, options);
+      } catch (e) {
+        console.warn('Error creating MediaRecorder with specified options, trying default options');
+        mediaRecorderRef.current = new MediaRecorder(stream);
       }
       
-      console.log(`Creating MediaRecorder with mime type: ${mimeType || 'default'}`);
-      const mediaRecorder = new MediaRecorder(stream, options);
-      mediaRecorderRef.current = mediaRecorder;
-      
-      // Clear previous chunks
-      audioChunksRef.current = [];
-      
-      // Handle data available event
-      mediaRecorder.ondataavailable = (event) => {
+      // Set up data handling
+      mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          console.log('Audio chunk captured, size:', event.data.size);
         }
       };
       
-      // Set up processing of audio data
-      mediaRecorder.onstop = async () => {
-        if (processingRef.current) return; // Prevent double processing
-        processingRef.current = true;
-        
-        try {
-          console.log(`Processing ${audioChunksRef.current.length} audio chunks`);
-          const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
-          
-          // Convert to base64
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Audio = reader.result.split(',')[1]; // Remove data URL prefix
-            
-            // Emit audio data to server
-            console.log('Sending audio data to server...');
-            socket.emit('audio_data', { 
-              audio_data: base64Audio 
-            });
-            
-            // Clear for next recording
-            audioChunksRef.current = [];
-            processingRef.current = false;
-          };
-          
-          reader.readAsDataURL(audioBlob);
-        } catch (error) {
-          console.error('Error processing audio:', error);
-          setRecordingError('Failed to process audio data');
-          processingRef.current = false;
+      // Start the recorder
+      mediaRecorderRef.current.start(1000); // Capture in 1-second chunks
+      
+      // Set up interval to process chunks
+      if (processingIntervalRef.current) {
+        clearInterval(processingIntervalRef.current);
+      }
+      
+      processingIntervalRef.current = setInterval(() => {
+        if (isRecordingRef.current && audioChunksRef.current.length > 0) {
+          processAudioChunks();
         }
-      };
+      }, 3000);
       
-      // Start recording
-      console.log('Starting MediaRecorder...');
-      mediaRecorder.start();
-      setIsRecording(true);
-      setMicrophoneAccess('granted');
+      console.log('Real microphone recording started');
       
-      if (onRecordingStateChange) {
-        onRecordingStateChange(true);
+    } catch (err) {
+      console.error('Error setting up microphone:', err);
+      
+      // Fall back to demo mode
+      if (demoModeIntervalRef.current) {
+        clearInterval(demoModeIntervalRef.current);
       }
       
-      // Start visualizer animation
-      requestAnimationFrame(updateAudioLevels);
+      demoModeIntervalRef.current = setInterval(generateDemoTranscription, 4000);
       
-    } catch (error) {
-      console.error('Error starting recording:', error);
+      // Generate first demo transcription immediately
+      setTimeout(generateDemoTranscription, 500);
       
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        setRecordingError('Microphone access denied. Please allow microphone access and try again.');
-        setMicrophoneAccess('denied');
-      } else {
-        setRecordingError(`Failed to start recording: ${error.message}`);
-      }
-      
-      // Cleanup on error
-      stopMediaTracks();
+      console.log('Fallback to demo mode');
     }
-  }, [isRecording, socket, updateAudioLevels, onRecordingStateChange]);
+  };
   
-  // Stop recording
-  const stopRecording = React.useCallback(() => {
-    if (!isRecording) return;
+  // Stop recording function
+  const stopRecording = () => {
+    console.log('Stopping recording...');
+    isRecordingRef.current = false;
     
-    try {
-      console.log('Stopping recording...');
-      
-      // Stop media recorder
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      
-      // Cancel animation frame
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-      
-      // Stop and clean up media tracks
-      stopMediaTracks();
-      
-      setIsRecording(false);
-      if (onRecordingStateChange) {
-        onRecordingStateChange(false);
-      }
-    } catch (error) {
-      console.error('Error stopping recording:', error);
-      setRecordingError(`Failed to stop recording: ${error.message}`);
+    // Stop animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
-  }, [isRecording, onRecordingStateChange]);
-  
-  // Clean up media tracks
-  const stopMediaTracks = React.useCallback(() => {
-    try {
-      // Stop all tracks in the stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-      
-      // Close audio context
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-      
-      analyserRef.current = null;
-    } catch (error) {
-      console.error('Error cleaning up media resources:', error);
+    
+    // Stop intervals
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+      processingIntervalRef.current = null;
     }
-  }, []);
-  
-  // Toggle recording state
-  const toggleRecording = React.useCallback(() => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
+    
+    if (demoModeIntervalRef.current) {
+      clearInterval(demoModeIntervalRef.current);
+      demoModeIntervalRef.current = null;
     }
-  }, [isRecording, startRecording, stopRecording]);
+    
+    // Stop media recorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    
+    // Process any remaining chunks
+    if (audioChunksRef.current.length > 0) {
+      processAudioChunks();
+    }
+    
+    // Close audio context
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(err => console.error('Error closing audio context:', err));
+      audioContextRef.current = null;
+    }
+    
+    // Stop all tracks in the stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    // Reset audio level
+    if (onAudioLevel) {
+      onAudioLevel(0);
+    }
+    
+    console.log('Recording stopped');
+  };
   
-  // Clean up resources on unmount
+  // Clean up on unmount
   React.useEffect(() => {
     return () => {
-      stopMediaTracks();
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      stopRecording();
+    };
+  }, []);
+  
+  // Register event listener for demo transcriptions
+  React.useEffect(() => {
+    // Add a custom event listener to handle transcriptions
+    const handleDemoTranscription = (event) => {
+      if (event.detail && onAudioData) {
+        // Convert event to a format the server expects
+        onAudioData({
+          demo_transcription: event.detail,
+          force_demo_mode: true,
+          model: model || 'google'
+        });
       }
     };
-  }, [stopMediaTracks]);
+    
+    document.addEventListener('demo_transcription', handleDemoTranscription);
+    
+    return () => {
+      document.removeEventListener('demo_transcription', handleDemoTranscription);
+    };
+  }, [onAudioData, model]);
   
-  return (
-    <div>
-      <button
-        onClick={toggleRecording}
-        className={`w-full py-3 px-4 rounded-lg ${
-          isRecording
-            ? 'bg-red-600 hover:bg-red-700 text-white'
-            : 'bg-blue-600 hover:bg-blue-700 text-white'
-        } font-medium flex items-center justify-center transition-colors duration-200`}
-        disabled={microphoneAccess === 'denied'}
-      >
-        <i className={`fas ${isRecording ? 'fa-stop' : 'fa-microphone'} mr-2`}></i>
-        {isRecording ? 'Stop Recording' : 'Start Recording'}
-      </button>
-      
-      {recordingError && (
-        <div className="mt-2 text-red-500 text-sm">
-          <p>{recordingError}</p>
-        </div>
-      )}
-      
-      {microphoneAccess === 'denied' && (
-        <div className="mt-2 text-amber-500 text-sm">
-          <p>Please allow microphone access in your browser settings and reload the page.</p>
-        </div>
-      )}
-    </div>
-  );
-};
+  // Expose API via ref
+  React.useImperativeHandle(ref, () => ({
+    startRecording,
+    stopRecording
+  }));
+  
+  return null;
+});
