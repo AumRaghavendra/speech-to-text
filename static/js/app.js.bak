@@ -334,10 +334,6 @@ const App = () => {
       socket.off('error');
     };
   }, []);
-
-  // Handle recording toggle
-  const toggleRecording = () => {
-    if (isRecording) {
       // Stop recording
       if (audioRecorderRef.current) {
         audioRecorderRef.current.stopRecording();
@@ -354,28 +350,7 @@ const App = () => {
         clearInterval(window.backupDemoInterval);
         window.backupDemoInterval = null;
       }
-      
-      setIsRecording(false);
-    } else {
-      // Start recording
       if (audioRecorderRef.current) {
-        audioRecorderRef.current.startRecording();
-      }
-      
-      // Start demo mode interval only if demo mode is enabled
-      if (demoMode) {
-        const interval = setInterval(generateDemoTranscription, 4000);
-        setDemoModeInterval(interval);
-        
-        // Generate first transcription immediately
-        setTimeout(generateDemoTranscription, 500);
-      }
-      
-      setIsRecording(true);
-    }
-  };
-  
-  // Handle demo mode toggle
   const handleDemoModeToggle = (event) => {
     const isChecked = event.target.checked;
     setDemoMode(isChecked);
@@ -400,6 +375,25 @@ const App = () => {
         clearInterval(window.backupDemoInterval);
         window.backupDemoInterval = null;
       }
+    }
+  };
+      setIsRecording(false);
+    } else {
+      // Start recording
+      if (audioRecorderRef.current) {
+        audioRecorderRef.current.startRecording();
+      }
+      
+      // Start demo mode interval only if demo mode is enabled
+      if (demoMode) {
+        const interval = setInterval(generateDemoTranscription, 4000);
+        setDemoModeInterval(interval);
+        
+        // Generate first transcription immediately
+        setTimeout(generateDemoTranscription, 500);
+      }
+      
+      setIsRecording(true);
     }
   };
   
@@ -453,11 +447,18 @@ const App = () => {
     
     // Also reset on server
     socket.emit('reset_performance_metrics');
-  };
-  
-  // Handle audio data from recorder
-  const handleAudioData = (audioData) => {
-    if (isConnected) {
+    return () => {
+      // Clear demo interval
+      if (demoModeInterval) {
+        clearInterval(demoModeInterval);
+      }
+      
+      // Clear backup demo interval
+      if (window.backupDemoInterval) {
+        clearInterval(window.backupDemoInterval);
+        window.backupDemoInterval = null;
+      }
+    };
       socket.emit('audio_data', audioData);
     }
   };
@@ -476,151 +477,158 @@ const App = () => {
       if (demoModeInterval) {
         clearInterval(demoModeInterval);
       }
-      
-      // Clear backup demo interval
-      if (window.backupDemoInterval) {
-        clearInterval(window.backupDemoInterval);
-        window.backupDemoInterval = null;
-      }
     };
   }, [demoModeInterval]);
   
-  // Start demo mode interval
-  const startDemoModeInterval = () => {
-    if (isRecording && demoMode) {
-      const interval = setInterval(generateDemoTranscription, 4000);
-      setDemoModeInterval(interval);
-      
-      // Generate first transcription immediately
-      setTimeout(generateDemoTranscription, 500);
-    }
-  };
-  
-  // Render the UI
   return (
-    <div className="app-container">
-      {/* Header */}
-      <header className="app-header">
-        <h1>Speech Recognition Comparison Tool</h1>
-        <div className="header-actions">
+    <div className="container mx-auto px-4 py-8 max-w-6xl fade-in">
+      <header className="text-center mb-8">
+        <h1 className="text-4xl font-bold text-indigo-400 dark:text-indigo-300 mb-2">Speech-to-Text Comparison</h1>
+        <p className="text-lg text-gray-600 dark:text-gray-300">
+          Compare Vosk, Whisper, and Google Speech Recognition in real-time
+        </p>
+        <div className="absolute top-4 right-4">
           <button 
-            className={`theme-toggle ${darkMode ? 'dark-active' : ''}`}
             onClick={toggleDarkMode}
+            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
             aria-label="Toggle dark mode"
           >
-            {darkMode ? '☀️' : '🌙'}
+            {darkMode ? (
+              <i className="fas fa-sun"></i>
+            ) : (
+              <i className="fas fa-moon"></i>
+            )}
           </button>
         </div>
       </header>
       
-      {/* Main Content */}
-      <main className="app-content">
-        <div className="control-panel">
-          <div className="model-selection">
-            <h2>Models</h2>
-            <ModelSelector 
-              models={['google', 'vosk', 'whisper']} 
-              currentModel={currentModel} 
-              onModelChange={handleModelChange}
-            />
-          </div>
-          
-          <div className="audio-controls">
-            <h2>Controls</h2>
-            <div className="control-actions">
-              <button 
-                className={`record-button ${isRecording ? 'recording' : ''}`}
-                onClick={toggleRecording}
-              >
-                {isRecording ? 'Stop Recording' : 'Start Recording'}
-              </button>
-              
-              <div className="toggle-control">
-                <label className="toggle-label">
-                  <input 
-                    type="checkbox" 
-                    id="demoMode"
-                    checked={demoMode} 
-                    onChange={handleDemoModeToggle} 
-                  />
-                  <span className="toggle-text">Demo Mode</span>
-                </label>
-              </div>
-              
-              <div className="toggle-control">
-                <label className="toggle-label">
-                  <input 
-                    type="checkbox" 
-                    id="noise-reduction"
-                    checked={noiseReduction} 
-                    onChange={handleNoiseReductionToggle} 
-                  />
-                  <span className="toggle-text">Noise Reduction</span>
-                </label>
-              </div>
-              
-              <div className="toggle-control">
-                <label className="toggle-label">
-                  <input 
-                    type="checkbox" 
-                    id="sentiment-toggle"
-                    checked={sentimentAnalysis} 
-                    onChange={handleSentimentAnalysisToggle} 
-                  />
-                  <span className="toggle-text">Sentiment Analysis</span>
-                </label>
+      {errorMessage && (
+        <div className="bg-red-100 dark:bg-red-900 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-4 mb-6" role="alert">
+          <p>{errorMessage}</p>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="col-span-1 lg:col-span-2">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Real-Time Transcription</h2>
+              <div>
+                <button
+                  onClick={toggleRecording}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    isRecording 
+                      ? 'bg-red-600 text-white' 
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  <i className={`fas ${isRecording ? 'fa-stop' : 'fa-microphone'} mr-2`}></i>
+                  {isRecording ? 'Stop Recording' : 'Start Recording'}
+                </button>
               </div>
             </div>
-          </div>
-          
-          <AudioVisualizer 
-            ref={audioVisualizerRef}
-            level={currentAudioLevel}
-            isRecording={isRecording} 
-          />
-        </div>
-        
-        <div className="results-panel">
-          <div className="transcription-results">
-            <h2>Transcription Results</h2>
+            
+            <AudioVisualizer 
+              ref={audioVisualizerRef}
+              active={isRecording}
+            />
+            
+            <AudioRecorder
+              ref={audioRecorderRef}
+              onAudioData={handleAudioData}
+              onAudioLevel={handleAudioLevel}
+              model={currentModel}
+              noiseReduction={noiseReduction}
+              demoMode={demoMode}
+            />
+            
+            <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">Settings</h3>
+              <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="noiseReduction"
+                    className="form-checkbox h-5 w-5 text-indigo-600"
+                    checked={noiseReduction}
+                    onChange={handleNoiseReductionToggle}
+                  />
+                  <label htmlFor="noiseReduction" className="ml-2 text-gray-700 dark:text-gray-300">
+                    Noise Reduction
+                  </label>
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="sentimentAnalysis"
+                    className="form-checkbox h-5 w-5 text-indigo-600"
+                    checked={sentimentAnalysis}
+                    onChange={handleSentimentAnalysisToggle}
+                  />
+                  <label htmlFor="sentimentAnalysis" className="ml-2 text-gray-700 dark:text-gray-300">
+                    Sentiment Analysis
+                  </label>
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="demoMode"
+                    className="form-checkbox h-5 w-5 text-indigo-600"
+                    checked={demoMode}
+                    onChange={toggleDemoMode}
+                  />
+                  <label htmlFor="demoMode" className="ml-2 text-gray-700 dark:text-gray-300">
+                    Demo Mode <span className="text-xs italic">(Disable to use your real voice)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">Speech Recognition Model</h3>
+              <ModelSelector 
+                currentModel={currentModel}
+                onModelChange={handleModelChange}
+              />
+            </div>
+            
             <TranscriptionDisplay 
               results={transcriptionResults}
               showSentiment={sentimentAnalysis}
             />
           </div>
-          
-          <div className="performance-metrics">
-            <h2>
-              Performance Metrics
-              <button 
-                className="reset-button"
+        </div>
+        
+        <div className="col-span-1">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 transition-colors duration-300">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Performance Metrics</h2>
+              <button
                 onClick={handleResetMetrics}
-                title="Reset metrics"
+                className="px-3 py-1 rounded text-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500"
               >
                 Reset
               </button>
-            </h2>
+            </div>
+            
             <PerformanceMetrics metrics={performanceMetrics} />
           </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 transition-colors duration-300">
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Sentiment Analysis</h2>
+            <SentimentVisualizer 
+              results={transcriptionResults} 
+              enabled={sentimentAnalysis}
+            />
+          </div>
         </div>
-      </main>
+      </div>
       
-      {/* Footer */}
-      <footer className="app-footer">
-        <p className="connection-status">
-          Status: {isConnected ? 'Connected' : 'Disconnected'}
-          {errorMessage && <span className="error-message"> - {errorMessage}</span>}
-        </p>
+      <footer className="mt-10 text-center text-gray-500 dark:text-gray-400 text-sm">
+        <p>© 2025 Speech-to-Text Comparison Tool</p>
       </footer>
-      
-      {/* Audio recorder component (invisible) */}
-      <AudioRecorder 
-        ref={audioRecorderRef}
-        onAudioData={handleAudioData}
-        onAudioLevel={handleAudioLevel}
-        model={currentModel}
-        demoMode={demoMode}
-      />
     </div>
   );
 };
