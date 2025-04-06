@@ -1,105 +1,76 @@
 // Model Selector Component
 
-const ModelSelector = ({ currentModel, onModelChange, bestModel }) => {
-  // Model data with descriptions
-  const models = [
-    {
-      id: 'google',
-      name: 'Google Speech Recognition',
-      icon: 'fab fa-google',
-      description: 'Cloud-based service with high accuracy. Internet connection required.',
-      color: 'bg-blue-500',
-      textColor: 'text-blue-800'
-    },
-    {
-      id: 'vosk',
-      name: 'Vosk (Offline Model)',
-      icon: 'fas fa-microphone-alt',
-      description: 'Offline, on-device model. Works without internet connection.',
-      color: 'bg-red-500',
-      textColor: 'text-red-800'
-    },
-    {
-      id: 'whisper',
-      name: 'Whisper',
-      icon: 'fas fa-comment-dots',
-      description: 'OpenAI\'s speech recognition model. Excellent for various accents.',
-      color: 'bg-green-500',
-      textColor: 'text-green-800'
-    }
-  ];
+const ModelSelector = ({ currentModel, onModelChange }) => {
+  const [selected, setSelected] = React.useState(currentModel || 'google');
+  const [models, setModels] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
   
-  // Handle model selection
-  const handleModelSelect = (modelId) => {
-    if (modelId !== currentModel) {
-      // Store the selected model in a global variable for demo mode to access
-      window.currentSelectedModel = modelId;
-      
-      // Set up a fallback in case the model switch causes issues
-      if (modelId === 'vosk') {
-        console.log("Setting up Vosk model with fallback protection");
-        // Add a safety check for the demo mode
-        window.voskFallbackTimeout = setTimeout(() => {
-          console.log("Applying demo mode fallback for Vosk model");
-          // If we're in demo mode, trigger a demo transcription to keep things working
-          if (window.isDemoMode || window.isBackupDemoMode) {
-            const customEvent = new CustomEvent('demo-transcription', {
-              detail: {
-                text: "Using the Vosk model for offline speech recognition.",
-                model: "vosk",
-                confidence: 0.75,
-                processing_time: 350,
-                demo_mode: true,
-                timestamp: Date.now(),
-                sentiment: {
-                  polarity: 0.5,
-                  label: "Positive",
-                  emoji: "😊",
-                  confidence: 0.8,
-                  specific_emotion: "informative"
-                }
-              }
-            });
-            document.dispatchEvent(customEvent);
-          }
-        }, 3000);
-      } else {
-        // Clear any pending fallback timeouts when switching to other models
-        if (window.voskFallbackTimeout) {
-          clearTimeout(window.voskFallbackTimeout);
-          window.voskFallbackTimeout = null;
-        }
-      }
-      
-      // Change the model
-      onModelChange(modelId);
+  // Fetch available models from server on load
+  React.useEffect(() => {
+    fetch('/models')
+      .then(response => response.json())
+      .then(data => {
+        setModels(data.models || []);
+        setLoading(false);
+      })
+      .catch(error => {
+        console.error('Error fetching models:', error);
+        // Fallback models in case of error
+        setModels(['google', 'vosk', 'whisper']);
+        setLoading(false);
+      });
+  }, []);
+  
+  // Update selected model when prop changes
+  React.useEffect(() => {
+    if (currentModel && currentModel !== selected) {
+      setSelected(currentModel);
+    }
+  }, [currentModel]);
+  
+  const handleModelChange = (model) => {
+    setSelected(model);
+    if (onModelChange) {
+      onModelChange(model);
     }
   };
   
+  // Render loading indicator if models are still loading
+  if (loading) {
+    return (
+      <div className="p-2 text-center">
+        <p className="text-gray-500 dark:text-gray-400">Loading models...</p>
+      </div>
+    );
+  }
+  
   return (
-    <div className="model-selector">
-      <div className="grid grid-cols-1 gap-3">
-        {models.map(model => (
-          <div 
-            key={model.id}
-            className={`p-3 rounded-lg border-2 cursor-pointer model-transition ${
-              model.id === currentModel 
-                ? `border-${model.color.replace('bg-', '')} ${model.color.replace('bg-', 'bg-')} bg-opacity-10` 
-                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-            } ${model.id === bestModel ? 'best-model' : ''}`}
-            onClick={() => handleModelSelect(model.id)}
-          >
-            <div className="flex items-center">
-              <div className={`w-10 h-10 rounded-full ${model.color} flex items-center justify-center text-white mr-3`}>
-                <i className={model.icon}></i>
-              </div>
-              <div>
-                <h4 className="font-medium text-gray-900 dark:text-gray-100">{model.name}</h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{model.description}</p>
-              </div>
-            </div>
-          </div>
-        ))}
+    <div className="space-y-2">
+      {models.map(model => (
+        <div key={model} className="flex items-center">
+          <input
+            type="radio"
+            id={`model-${model}`}
+            name="speech-model"
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+            checked={selected === model}
+            onChange={() => handleModelChange(model)}
+          />
+          <label htmlFor={`model-${model}`} className="ml-2 block text-sm capitalize">
+            {model}
+            {model === 'google' && ' (Online)'}
+            {model === 'vosk' && ' (Offline)'}
+            {model === 'whisper' && ' (OpenAI)'}
+          </label>
+        </div>
+      ))}
+      
+      <div className="mt-4 text-xs">
+        <p className="text-gray-500 dark:text-gray-400">
+          {selected === 'google' && 'Google Speech API provides high accuracy but requires internet connection.'}
+          {selected === 'vosk' && 'Vosk runs completely offline with lower resource usage.'}
+          {selected === 'whisper' && 'OpenAI Whisper provides excellent accuracy for complex audio.'}
+        </p>
       </div>
     </div>
   );
