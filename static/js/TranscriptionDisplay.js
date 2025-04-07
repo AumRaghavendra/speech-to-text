@@ -1,6 +1,6 @@
 // Transcription Display Component
 
-const TranscriptionDisplay = ({ results, showSentiment }) => {
+const TranscriptionDisplay = ({ results, sentimentAnalysisEnabled }) => {
   const containerRef = React.useRef(null);
   
   // Auto-scroll to the bottom when new results come in
@@ -114,7 +114,7 @@ const TranscriptionDisplay = ({ results, showSentiment }) => {
               </div>
               <div className="text-gray-800 dark:text-gray-200">
                 {result.text}
-                {showSentiment && result.sentiment && (
+                {sentimentAnalysisEnabled && result.sentiment && (
                   <span className="sentiment-emoji ml-2 text-xl" title={result.sentiment.label}>
                     {result.sentiment.emoji}
                   </span>

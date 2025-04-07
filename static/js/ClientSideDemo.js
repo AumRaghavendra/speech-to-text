@@ -100,46 +100,8 @@ const ClientSideDemo = (() => {
     return result;
   };
   
-  // Track demo mode state
-  let isDemoModeActive = false;
-  
-  // Function to check if demo mode is active
-  const isDemoMode = () => {
-    return isDemoModeActive;
-  };
-  
-  // Function to set demo mode state
-  const setDemoMode = (isActive) => {
-    isDemoModeActive = isActive;
-    console.log("Demo mode set to:", isActive);
-    
-    // Dispatch event for other components
-    const event = new CustomEvent("demoModeChanged", {
-      detail: { enabled: isActive }
-    });
-    document.dispatchEvent(event);
-  };
-  
-  // Initialize by checking for demo mode checkbox
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-      const demoModeCheckbox = document.querySelector("#demoMode");
-      if (demoModeCheckbox) {
-        isDemoModeActive = demoModeCheckbox.checked;
-        console.log("Initial demo mode state:", isDemoModeActive);
-        
-        // Listen for changes
-        demoModeCheckbox.addEventListener('change', (e) => {
-          setDemoMode(e.target.checked);
-        });
-      }
-    }, 1000);
-  });
-  
   // Return public API
   return {
-    generateTranscription: generateTranscription,
-    isDemoMode: isDemoMode,
-    setDemoMode: setDemoMode
+    generateTranscription: generateTranscription
   };
 })();
