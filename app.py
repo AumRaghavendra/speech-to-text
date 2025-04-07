@@ -28,11 +28,6 @@ def index():
     """Render the main application page"""
     return render_template('index.html')
 
-@app.route('/simple')
-def simple():
-    """Render the simple test page"""
-    return render_template('simple.html')
-
 @app.route('/api/models', methods=['GET'])
 def get_models():
     """Get available speech recognition models"""
