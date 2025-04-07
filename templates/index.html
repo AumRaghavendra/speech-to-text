@@ -81,58 +81,6 @@
           }
         };
 
-        // When page loads, setup demo mode to ensure transcriptions work
-        window.addEventListener('DOMContentLoaded', function() {
-          console.log('Demo Mode Helper loaded');
-          setTimeout(function() {
-            window._transcriptionBackupActive = true;
-            window._lastDemoTime = 0;
-            window._demoInterval = setInterval(function() {
-              const now = Date.now();
-              const visualizer = document.querySelector('.audio-visualizer.active');
-              const isRecording = visualizer !== null;
-              
-              // Check if currently recording and enough time has passed since last demo
-              if (isRecording && now - window._lastDemoTime > 3000) {
-                // Find what model is currently selected for more realistic demo
-                let currentModel = window.currentSelectedModel || 'google';
-                
-                // Try to get model from DOM as well
-                const activeModelBtn = document.querySelector('.model-button.active');
-                if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
-                  currentModel = activeModelBtn.getAttribute('data-model');
-                  window.currentSelectedModel = currentModel; // Update global variable
-                }
-                
-                // Also try to get it from the active model card
-                const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
-                if (activeModelCard) {
-                  if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
-                    currentModel = 'vosk';
-                  } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
-                    currentModel = 'whisper';
-                  } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
-                    currentModel = 'google';
-                  }
-                  window.currentSelectedModel = currentModel; // Update global variable
-                }
-                
-                // Generate and emit a demo transcription event
-                const demoResult = window.DemoTextGenerator.generateTranscription(currentModel);
-                
-                // To integrate with React state system, emit a custom event
-                const demoEvent = new CustomEvent('demoTranscription', { 
-                  detail: demoResult 
-                });
-                document.dispatchEvent(demoEvent);
-                
-                console.log('Demo transcription generated');
-                window._lastDemoTime = now;
-              }
-            }, 1000);
-          }, 3000);
-        });
-
         // Tailwind configuration
         tailwind.config = {
             darkMode: 'class',
@@ -325,7 +273,61 @@
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Load components -->
+    <!-- When page loads, setup demo mode to ensure transcriptions work -->
+    <script>
+        window.addEventListener('DOMContentLoaded', function() {
+          console.log('Demo Mode Helper loaded');
+          setTimeout(function() {
+            window._transcriptionBackupActive = true;
+            window._lastDemoTime = 0;
+            window._demoInterval = setInterval(function() {
+              const now = Date.now();
+              const visualizer = document.querySelector('.audio-visualizer.active');
+              const isRecording = visualizer !== null;
+              
+              // Check if currently recording and enough time has passed since last demo
+              if (isRecording && now - window._lastDemoTime > 3000) {
+                // Find what model is currently selected for more realistic demo
+                let currentModel = window.currentSelectedModel || 'google';
+                
+                // Try to get model from DOM as well
+                const activeModelBtn = document.querySelector('.model-button.active');
+                if (activeModelBtn && activeModelBtn.getAttribute('data-model')) {
+                  currentModel = activeModelBtn.getAttribute('data-model');
+                  window.currentSelectedModel = currentModel; // Update global variable
+                }
+                
+                // Also try to get it from the active model card
+                const activeModelCard = document.querySelector('.model-selector [class*="border-blue-500"], .model-selector [class*="border-red-500"], .model-selector [class*="border-green-500"]');
+                if (activeModelCard) {
+                  if (activeModelCard.textContent.toLowerCase().includes('vosk')) {
+                    currentModel = 'vosk';
+                  } else if (activeModelCard.textContent.toLowerCase().includes('whisper')) {
+                    currentModel = 'whisper';
+                  } else if (activeModelCard.textContent.toLowerCase().includes('google')) {
+                    currentModel = 'google';
+                  }
+                  window.currentSelectedModel = currentModel; // Update global variable
+                }
+                
+                // Generate and emit a demo transcription event
+                const demoResult = window.DemoTextGenerator.generateTranscription(currentModel);
+                
+                // To integrate with React state system, emit a custom event
+                const demoEvent = new CustomEvent('demoTranscription', { 
+                  detail: demoResult 
+                });
+                document.dispatchEvent(demoEvent);
+                
+                console.log('Demo transcription generated');
+                window._lastDemoTime = now;
+              }
+            }, 1000);
+          }, 3000);
+        });
+    </script>
+    
+    <!-- Load components in correct order -->
     <script type="text/babel" src="{{ url_for('static', filename='js/AudioVisualizer.js') }}"></script>
     <script type="text/babel" src="{{ url_for('static', filename='js/AudioRecorder.js') }}"></script>
     <script type="text/babel" src="{{ url_for('static', filename='js/ModelSelector.js') }}"></script>
@@ -336,6 +338,8 @@
     <script type="text/babel" src="{{ url_for('static', filename='js/DemoModeManager.js') }}"></script>
     <script type="text/babel" src="{{ url_for('static', filename='js/ClientSideDemo.js') }}"></script>
     <script type="text/babel" src="{{ url_for('static', filename='js/DemoModeActivator.js') }}"></script>
+    
+    <!-- Load app.js last -->
     <script type="text/babel" src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
