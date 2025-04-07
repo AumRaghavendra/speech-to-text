@@ -140,9 +140,48 @@ const AudioRecorder = React.forwardRef((props, ref) => {
     }
     animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
     
+    // Always set up demo mode as a fallback
+    const setupDemoMode = () => {
+      console.log('Setting up demo mode');
+      
+      // Clear any existing interval
+      if (demoModeIntervalRef.current) {
+        clearInterval(demoModeIntervalRef.current);
+      }
+      
+      // Set up new interval for demo transcriptions
+      demoModeIntervalRef.current = setInterval(generateDemoTranscription, 4000);
+      
+      // Generate first demo transcription immediately for better user experience
+      setTimeout(generateDemoTranscription, 500);
+      
+      // Dispatch an event to notify that we're in demo mode
+      const demoModeEvent = new CustomEvent('demo-mode-activated', { detail: { forced: true } });
+      document.dispatchEvent(demoModeEvent);
+      
+      // Set a global flag that other components can check
+      window.forcedDemoMode = true;
+      window.isBackupDemoMode = true;
+    };
+    
+    // If demo mode is explicitly enabled, just use that
+    if (demoMode) {
+      console.log('Demo mode explicitly enabled, skipping microphone setup');
+      setupDemoMode();
+      return;
+    }
+    
     // Try to set up real microphone recording
     try {
       console.log('Requesting microphone access...');
+      
+      // Create a timeout to handle slow permission requests or silent failures
+      const permissionTimeout = setTimeout(() => {
+        console.warn('Microphone permission request timed out');
+        setupDemoMode();
+      }, 5000);
+      
+      // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { 
           echoCancellation: true,
@@ -151,42 +190,92 @@ const AudioRecorder = React.forwardRef((props, ref) => {
         } 
       });
       
+      // Clear the timeout since we got a response
+      clearTimeout(permissionTimeout);
+      
+      // Check if we actually have audio tracks
+      if (!stream || !stream.getAudioTracks || stream.getAudioTracks().length === 0) {
+        console.error('No audio tracks in media stream');
+        setupDemoMode();
+        return;
+      }
+      
       console.log('Microphone access granted');
       streamRef.current = stream;
       
       // Create audio context and analyzer for visualizer
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      audioContextRef.current = audioContext;
+      let audioContext;
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContextRef.current = audioContext;
+      } catch (e) {
+        console.error('Error creating AudioContext:', e);
+        setupDemoMode();
+        return;
+      }
       
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      analyserRef.current = analyser;
-      
-      // Connect microphone to analyzer
-      const source = audioContext.createMediaStreamSource(stream);
-      source.connect(analyser);
+      // Create analyzer for visualizer
+      try {
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyserRef.current = analyser;
+        
+        // Connect microphone to analyzer
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+      } catch (e) {
+        console.error('Error setting up audio analyzer:', e);
+        // We can continue without the analyzer, but visualization won't be as good
+      }
       
       // Set up media recorder
       audioChunksRef.current = [];
-      const options = { mimeType: 'audio/webm' };
+      let options = {};
+      
+      // Try different mime types for better browser compatibility
+      if (MediaRecorder.isTypeSupported('audio/webm')) {
+        options = { mimeType: 'audio/webm' };
+      } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+        options = { mimeType: 'audio/ogg' };
+      }
       
       try {
         mediaRecorderRef.current = new MediaRecorder(stream, options);
       } catch (e) {
         console.warn('Error creating MediaRecorder with specified options, trying default options');
-        mediaRecorderRef.current = new MediaRecorder(stream);
+        try {
+          mediaRecorderRef.current = new MediaRecorder(stream);
+        } catch (err) {
+          console.error('Failed to create MediaRecorder:', err);
+          setupDemoMode();
+          return;
+        }
       }
       
       // Set up data handling
       mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
           console.log('Audio chunk captured, size:', event.data.size);
+        } else {
+          console.warn('Empty audio data received');
         }
       };
       
+      // Add error handling for media recorder
+      mediaRecorderRef.current.onerror = (event) => {
+        console.error('MediaRecorder error:', event);
+        setupDemoMode();
+      };
+      
       // Start the recorder
-      mediaRecorderRef.current.start(1000); // Capture in 1-second chunks
+      try {
+        mediaRecorderRef.current.start(1000); // Capture in 1-second chunks
+      } catch (e) {
+        console.error('Error starting MediaRecorder:', e);
+        setupDemoMode();
+        return;
+      }
       
       // Set up interval to process chunks
       if (processingIntervalRef.current) {
@@ -201,32 +290,13 @@ const AudioRecorder = React.forwardRef((props, ref) => {
       
       console.log('Real microphone recording started');
       
-      // If demoMode is enabled, also start demo transcriptions
-      if (demoMode) {
-        if (demoModeIntervalRef.current) {
-          clearInterval(demoModeIntervalRef.current);
-        }
-        
-        demoModeIntervalRef.current = setInterval(generateDemoTranscription, 4000);
-        
-        // Generate first demo transcription immediately
-        setTimeout(generateDemoTranscription, 500);
-      }
+      // Set global flag to indicate we're not in demo mode
+      window.forcedDemoMode = false;
+      window.isBackupDemoMode = false;
       
     } catch (err) {
       console.error('Error setting up microphone:', err);
-      
-      // Fall back to demo mode
-      if (demoModeIntervalRef.current) {
-        clearInterval(demoModeIntervalRef.current);
-      }
-      
-      demoModeIntervalRef.current = setInterval(generateDemoTranscription, 4000);
-      
-      // Generate first demo transcription immediately
-      setTimeout(generateDemoTranscription, 500);
-      
-      console.log('Fallback to demo mode');
+      setupDemoMode();
     }
   };
   
@@ -254,7 +324,11 @@ const AudioRecorder = React.forwardRef((props, ref) => {
     
     // Stop media recorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {
+        console.error('Error stopping media recorder:', e);
+      }
       mediaRecorderRef.current = null;
     }
     
@@ -265,13 +339,21 @@ const AudioRecorder = React.forwardRef((props, ref) => {
     
     // Close audio context
     if (audioContextRef.current) {
-      audioContextRef.current.close().catch(err => console.error('Error closing audio context:', err));
+      try {
+        audioContextRef.current.close().catch(err => console.error('Error closing audio context:', err));
+      } catch (e) {
+        console.error('Error closing audio context:', e);
+      }
       audioContextRef.current = null;
     }
     
     // Stop all tracks in the stream
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      try {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      } catch (e) {
+        console.error('Error stopping stream tracks:', e);
+      }
       streamRef.current = null;
     }
     

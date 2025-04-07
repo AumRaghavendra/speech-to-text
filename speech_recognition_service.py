@@ -26,13 +26,21 @@ except Exception as e:
 
 # Initialize OpenAI client for Whisper API
 try:
-    # Initialize the OpenAI client
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    # We'll use the API directly rather than loading the model locally
-    whisper_model = True
-    logger.info("OpenAI Whisper API configuration loaded successfully")
+    # Check if OpenAI API key is available
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    if not openai_api_key:
+        logger.warning("OpenAI API key not found in environment variables. Whisper model will be disabled.")
+        client = None
+        whisper_model = None
+    else:
+        # Initialize the OpenAI client
+        client = OpenAI(api_key=openai_api_key)
+        # We'll use the API directly rather than loading the model locally
+        whisper_model = True
+        logger.info("OpenAI Whisper API configuration loaded successfully")
 except Exception as e:
     logger.error(f"Error configuring OpenAI Whisper API: {str(e)}")
+    client = None
     whisper_model = None
 
 # Initialize speech recognizer for Google
